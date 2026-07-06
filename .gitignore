@@ -152,3 +152,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
+# SQLite Database Files
+*.db
+*.db-journal
+dev.db
+dev.db-journal
+

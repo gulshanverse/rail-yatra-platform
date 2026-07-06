@@ -6,29 +6,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
-enum Role {
-  GUEST
-  USER
-  PREMIUM
-  PREMIUM_PLUS
-  MODERATOR
-  SUPPORT
-  ADMIN
-  SUPER_ADMIN
-  DEVELOPER
-  AUDITOR
-}
-
-enum SubscriptionTier {
-  FREE
-  PREMIUM
-  PREMIUM_PLUS
-}
-
+// User roles represented as strings in the SQLite database:
+// GUEST, USER, PREMIUM, PREMIUM_PLUS, MODERATOR, SUPPORT, ADMIN, SUPER_ADMIN, DEVELOPER, AUDITOR
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
@@ -36,7 +19,7 @@ model User {
   fullName      String
   passwordHash  String
   avatar        String?
-  role          Role           @default(USER)
+  role          String         @default("USER")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   deletedAt     DateTime?
@@ -59,9 +42,9 @@ model UserSetting {
   accessibility   Boolean  @default(false)
   voiceMode       Boolean  @default(false)
   privacyMode     Boolean  @default(false)
-  aiPreferences   Json?    // e.g. { "preferredClass": "3A", "budgetRange": "medium" }
+  aiPreferences   String?  // JSON string (SQLite compatibility)
   language        String   @default("en")   // en, hi, etc.
-  travelPrefs     Json?    // e.g. { "preferredTrains": [], "favoriteStations": [] }
+  travelPrefs     String?  // JSON string (SQLite compatibility)
 }
 
 model Trip {
@@ -72,7 +55,7 @@ model Trip {
   destination  String
   journeyDate  DateTime
   returnDate   DateTime?
-  passengers   Json      // JSON list of passenger details
+  passengers   String    // JSON string list of passenger details
   journeyType  String    @default("direct") // direct, split, etc.
   budget       Decimal?
   status       String    @default("scheduled") // scheduled, completed, cancelled
@@ -87,7 +70,7 @@ model SearchHistory {
   query       String?
   source      String
   destination String
-  filters     Json?
+  filters     String?  // JSON string
   timestamp   DateTime @default(now())
 }
 
@@ -107,7 +90,7 @@ model PnrHistory {
   pnr          String   @unique
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  prediction   Json?    // prediction details, confidence, etc.
+  prediction   String?  // JSON string prediction details, confidence, etc.
   actualStatus String   @default("unknown")
   journeyDate  DateTime
   timestamp    DateTime @default(now())
@@ -119,7 +102,7 @@ model Conversation {
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   summary    String?
   messages   ChatMessage[]
-  context    Json?         // key-value store for AI session state
+  context    String?       // JSON string key-value store for AI session state
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 }
@@ -134,11 +117,12 @@ model ChatMessage {
   timestamp      DateTime     @default(now())
 }
 
+// Subscription tiers represented as strings: FREE, PREMIUM, PREMIUM_PLUS
 model Subscription {
   id        String           @id @default(uuid())
   userId    String
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tier      SubscriptionTier @default(FREE)
+  tier      String           @default("FREE")
   expiry    DateTime?
   status    String           @default("active") // active, expired, cancelled
   credits   Int              @default(3)        // AI journey analysis quota per month

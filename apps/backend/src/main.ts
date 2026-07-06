@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -12,6 +13,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Register cookie-parser for HttpOnly session cookie processing
+  app.use(cookieParser());
+
   // Enable global validation pipes for DTOs
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
@@ -23,4 +27,5 @@ async function bootstrap() {
   console.log(`[Backend Service] core api running on: http://localhost:${port}`);
 }
 bootstrap();
+
 
