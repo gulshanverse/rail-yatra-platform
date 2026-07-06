@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@theme {
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --background: hsl(220, 25%, 97%);
+  --foreground: hsl(220, 40%, 12%);
+
+  --card: hsl(220, 25%, 100%);
+  --card-foreground: hsl(220, 40%, 12%);
+
+  --popover: hsl(220, 25%, 100%);
+  --popover-foreground: hsl(220, 40%, 12%);
+
+  /* Royal Blue Primary */
+  --primary: hsl(220, 90%, 48%);
+  --primary-foreground: hsl(220, 25%, 100%);
+
+  /* Indigo Secondary */
+  --secondary: hsl(243, 75%, 59%);
+  --secondary-foreground: hsl(220, 25%, 100%);
+
+  /* Emerald Accent */
+  --accent: hsl(150, 84%, 37%);
+  --accent-foreground: hsl(220, 25%, 100%);
+
+  --muted: hsl(220, 15%, 90%);
+  --muted-foreground: hsl(220, 20%, 45%);
+
+  --border: hsl(220, 15%, 85%);
+  --input: hsl(220, 15%, 85%);
+  --ring: hsl(220, 90%, 48%);
+
+  --success: hsl(142, 76%, 36%);
+  --warning: hsl(38, 92%, 50%);
+  --danger: hsl(0, 84%, 60%);
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: hsl(222, 47%, 8%);
+  --foreground: hsl(210, 40%, 98%);
+
+  --card: hsl(222, 47%, 10%);
+  --card-foreground: hsl(210, 40%, 98%);
+
+  --popover: hsl(222, 47%, 10%);
+  --popover-foreground: hsl(210, 40%, 98%);
+
+  --primary: hsl(217, 91%, 60%);
+  --primary-foreground: hsl(222, 47%, 8%);
+
+  --secondary: hsl(245, 80%, 70%);
+  --secondary-foreground: hsl(222, 47%, 8%);
+
+  --accent: hsl(150, 86%, 45%);
+  --accent-foreground: hsl(222, 47%, 8%);
+
+  --muted: hsl(222, 30%, 18%);
+  --muted-foreground: hsl(215, 20%, 65%);
+
+  --border: hsl(222, 30%, 18%);
+  --input: hsl(222, 30%, 18%);
+  --ring: hsl(217, 91%, 60%);
+
+  --success: hsl(142, 70%, 45%);
+  --warning: hsl(38, 90%, 55%);
+  --danger: hsl(0, 84%, 65%);
+}
+
+* {
+  border-color: var(--border);
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  min-height: 100vh;
+}
+
+/* Premium UI Utility Classes */
+.glass {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.dark .glass {
+  background: rgba(10, 12, 18, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.shadow-premium {
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+.dark .shadow-premium {
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* Micro-interaction animation utilities */
+.btn-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-hover:hover {
+  transform: translateY(-1px);
+}
+.btn-hover:active {
+  transform: translateY(1px);
+}
