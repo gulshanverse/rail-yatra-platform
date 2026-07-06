@@ -27,13 +27,13 @@ For every checked item:
 - [x] Scaffold FastAPI AI service inside `/apps/ai-service`
 - [x] Create Prisma DB schema models (`User`, `UserSetting`, `Trip`, `SavedRoute`, `PnrHistory`, etc.)
 - [x] Establish global CSS variables for dark/light themes and glassmorphism styling in frontend
-- [ ] Add basic health checks across all services
+- [x] Add basic health checks across all services
 
 ## 🔑 Phase 2: Authentication & User Platform
-- [ ] Setup NestJS auth modules (Argon2id hashing, JWT access token, and HttpOnly refresh cookies)
-- [ ] Develop authentication views: Login screen, Registration screen, and recovery screens
-- [ ] Implement user settings dashboard and user settings JSON database synchronization
-- [ ] Setup Role-Based Access Control (RBAC) route guards
+- [x] Setup NestJS auth modules (Argon2id hashing, JWT access token, and HttpOnly refresh cookies)
+- [x] Develop authentication views: Login screen, Registration screen, and recovery screens
+- [x] Implement user settings dashboard and user settings JSON database synchronization
+- [x] Setup Role-Based Access Control (RBAC) route guards
 
 ## 🤖 Phase 3: AI Core Platform
 - [ ] Create LangGraph multi-agent infrastructure in FastAPI
