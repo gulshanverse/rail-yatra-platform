@@ -515,14 +515,21 @@ export default function AIWorkspace() {
             )}
           </div>
         </div>
-
-        <div className="p-4 border-t border-border bg-muted/30 shrink-0 flex items-center gap-3">
+        {/* User Card */}
+        <div 
+          onClick={() => router.push('/subscription')}
+          className="p-4 border-t border-border bg-muted/30 hover:bg-muted/50 shrink-0 flex items-center gap-3 cursor-pointer"
+          title="Manage Subscription & Billing"
+        >
           <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
             {user?.fullName[0] || 'U'}
           </div>
-          <div className="min-w-0 flex-1">
-            <h5 className="text-sm font-semibold truncate">{user?.fullName}</h5>
-            <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+          <div className="min-w-0 flex-1 flex justify-between items-center">
+            <div>
+              <h5 className="text-xs font-semibold truncate">{user?.fullName}</h5>
+              <p className="text-[9px] text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </div>
       </aside>

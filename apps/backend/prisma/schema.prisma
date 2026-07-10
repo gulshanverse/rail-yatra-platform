@@ -140,3 +140,30 @@ model Payment {
   status    String   // completed, failed, pending
   createdAt DateTime @default(now())
 }
+
+model Invoice {
+  id            String   @id @default(uuid())
+  paymentId     String?
+  userId        String
+  invoiceNumber String   @unique
+  pdfUrl        String?
+  amount        Decimal
+  currency      String   @default("INR")
+  status        String   @default("paid") // paid, void, refunded
+  createdAt     DateTime @default(now())
+}
+
+model UsageLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // ai_message, journey_analysis, pnr_check, recommendation_request
+  timestamp DateTime @default(now())
+}
+
+model BillingEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  eventType   String   // payment_success, payment_failed, subscription_renewed, subscription_cancelled
+  payload     String   // JSON string of event body
+  timestamp   DateTime @default(now())
+}
