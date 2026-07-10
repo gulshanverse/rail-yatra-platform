@@ -1,8 +1,10 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
+
+from app.api.endpoints import router as api_router
+from app.vector.qdrant import qdrant_rag
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -23,9 +25,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class ChatRequest(BaseModel):
-    message: str
-    conversation_id: str | None = None
+# Register routers
+app.include_router(api_router)
+
+@app.on_event("startup")
+def startup_event():
+    logger.info("Initializing vector search collections in Qdrant...")
+    qdrant_rag.initialize_collections()
+    logger.info("AI Core Platform started successfully.")
 
 @app.get("/health")
 def health_check():
@@ -36,14 +43,6 @@ def health_check():
         "version": "1.0.0"
     }
 
-@app.post("/chat")
-def basic_chat(request: ChatRequest):
-    logger.info(f"Received query: {request.message} for conversation: {request.conversation_id}")
-    return {
-        "reply": f"AI-First core parser received query: '{request.message}'",
-        "parsed_intent": "search_train",
-        "confidence": 0.95
-    }
-
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
