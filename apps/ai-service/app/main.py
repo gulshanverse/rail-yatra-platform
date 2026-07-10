@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from app.api.endpoints import router as api_router
+from app.api.intelligence import router as intelligence_router
 from app.vector.qdrant import qdrant_rag
 
 # Setup logging
@@ -27,6 +28,8 @@ app.add_middleware(
 
 # Register routers
 app.include_router(api_router)
+app.include_router(intelligence_router)
+
 
 @app.on_event("startup")
 def startup_event():
