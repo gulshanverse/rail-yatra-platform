@@ -9,8 +9,7 @@ from app.data.models import (
     NormalizedStation,
     NormalizedSeatAvailability,
     NormalizedPnrStatus,
-    NormalizedDelayHistory,
-    DataQualityMetadata
+    NormalizedDelayHistory
 )
 
 logger = logging.getLogger("ai-service.data.manager")

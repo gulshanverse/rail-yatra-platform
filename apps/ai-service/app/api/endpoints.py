@@ -1,9 +1,9 @@
 import logging
 import json
-from fastapi import APIRouter, Body
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 
 from app.orchestrator.graph import compiled_graph
 from app.memory.short_term import short_term_memory

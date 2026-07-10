@@ -21,7 +21,7 @@ def generate_option_explanations(option: Dict[str, Any], sub_scores: Dict[str, f
     if sub_scores["comfort"] >= 85:
         advantages.append(f"High comfort tier ({option['booking_class']} class)")
     elif sub_scores["comfort"] <= 40:
-        disadvantages.append(f"Basic sleeper class (low comfort on long transits)")
+        disadvantages.append("Basic sleeper class (low comfort on long transits)")
 
     # 3. Speed/Duration analysis
     advantages.append(f"Duration: {option['duration']}")
@@ -94,9 +94,9 @@ def compile_tradeoffs_report(options: List[Any]) -> str:
         report += "\n"
 
     report += (
-        f"### Decisive Trade-Off Analysis:\n"
-        f"- **Comfort vs. Cost**: Shifting to premium AC classes (1A/2A) offers a significant comfort index (+40 points) but increases dynamic pricing by ~Rs. 1,200.\n"
-        f"- **Junction Routing**: Boarding from adjacent junctions may improve confirmation probability by up to 25% due to station quotas."
+        "### Decisive Trade-Off Analysis:\n"
+        "- **Comfort vs. Cost**: Shifting to premium AC classes (1A/2A) offers a significant comfort index (+40 points) but increases dynamic pricing by ~Rs. 1,200.\n"
+        "- **Junction Routing**: Boarding from adjacent junctions may improve confirmation probability by up to 25% due to station quotas."
     )
 
     return report

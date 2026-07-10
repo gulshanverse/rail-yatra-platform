@@ -104,10 +104,14 @@ class JourneyIntelligenceAgent(BaseAgent):
         
         # Override with active context parameters if present
         if context:
-            if context.get("source"): requirement.source = str(context["source"])
-            if context.get("destination"): requirement.destination = str(context["destination"])
-            if context.get("journey_date"): requirement.journey_date = str(context["journey_date"])
-            if context.get("preferred_class"): requirement.preferred_class = str(context["preferred_class"])
+            if context.get("source"):
+                requirement.source = str(context["source"])
+            if context.get("destination"):
+                requirement.destination = str(context["destination"])
+            if context.get("journey_date"):
+                requirement.journey_date = str(context["journey_date"])
+            if context.get("preferred_class"):
+                requirement.preferred_class = str(context["preferred_class"])
 
         # 2. Execute deterministic analysis
         report = await journey_intelligence_engine.analyze_journey(requirement)

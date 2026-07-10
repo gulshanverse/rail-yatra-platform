@@ -1,7 +1,8 @@
 import logging
 import json
 import redis
-from typing import List, Dict, Any, Optional
+import time
+from typing import List, Dict, Any
 from app.config.config import settings
 
 logger = logging.getLogger("ai-service.memory.short_term")
@@ -94,4 +95,3 @@ class ShortTermMemory:
         return self._local_cache.get(key, [])
 
 short_term_memory = ShortTermMemory()
-import time # imported here to support local fallback timestamp checks
