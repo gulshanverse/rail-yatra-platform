@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -87,7 +91,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password.');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password.');
     }
@@ -104,7 +111,8 @@ export class AuthService {
     });
 
     // Strip password hash from returned profile
-    const { passwordHash: _, ...profile } = user;
+    const profile = { ...user };
+    delete (profile as { passwordHash?: string }).passwordHash;
 
     return {
       accessToken,
@@ -113,13 +121,12 @@ export class AuthService {
     };
   }
 
-  async verifyRefreshToken(token: string) {
+  verifyRefreshToken(token: string): { sub: string } {
     try {
-      const payload = this.jwtService.verify(token, {
+      return this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
-      return payload;
-    } catch (e) {
+    } catch {
       throw new UnauthorizedException('Invalid refresh token.');
     }
   }

@@ -1,19 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { 
   Sparkles, 
   ArrowLeft, 
-  Check, 
-  ChevronRight, 
-  Database, 
-  Gauge, 
-  HelpCircle, 
   Clock, 
-  X,
-  AlertCircle,
   Zap,
   Info,
   Sliders,
@@ -24,8 +17,6 @@ import {
   Eye,
   Activity,
   Heart,
-  ShieldAlert,
-  ThumbsUp,
   MessageCircle
 } from 'lucide-react';
 
@@ -59,7 +50,7 @@ interface UserInsight {
 }
 
 export default function UserSettingsCockpit() {
-  const { token, user } = useAuthStore();
+  const { token } = useAuthStore();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -90,15 +81,7 @@ export default function UserSettingsCockpit() {
     favoriteBoarding: 'NDLS'
   });
 
-  useEffect(() => {
-    if (!token) {
-      router.push('/login');
-    } else {
-      loadSettingsData();
-    }
-  }, [token, filterTab, categoryFilter]);
-
-  const loadSettingsData = async () => {
+  const loadSettingsData = useCallback(async () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${token}` };
@@ -126,7 +109,18 @@ export default function UserSettingsCockpit() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, filterTab, categoryFilter]);
+
+  useEffect(() => {
+    if (!token) {
+      router.push('/login');
+    } else {
+      const timer = setTimeout(() => {
+        void loadSettingsData();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [token, filterTab, categoryFilter, router, loadSettingsData]);
 
   const handleUpdatePreference = async (updates: Partial<NotificationPreference>) => {
     if (!preferences) return;

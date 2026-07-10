@@ -40,8 +40,9 @@ export default function Register() {
       setTimeout(() => {
         router.push('/login');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Connecting to backend failed. Make sure the backend server is running.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connecting to backend failed. Make sure the backend server is running.';
+      setError(message);
     } finally {
       setLoading(false);
     }

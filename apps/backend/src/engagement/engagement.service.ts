@@ -1,7 +1,12 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { ReminderSchedulerService } from './scheduler.service';
-import { EmailChannelService, SmsChannelService, PushChannelService, WhatsappChannelService } from './channels';
+import {
+  EmailChannelService,
+  SmsChannelService,
+  PushChannelService,
+  WhatsappChannelService,
+} from './channels';
 import { renderTemplate } from './templates';
 
 @Injectable()
@@ -14,13 +19,13 @@ export class EngagementService {
     private readonly emailChannel: EmailChannelService,
     private readonly smsChannel: SmsChannelService,
     private readonly pushChannel: PushChannelService,
-    private readonly whatsappChannel: WhatsappChannelService
+    private readonly whatsappChannel: WhatsappChannelService,
   ) {
     // Bind scheduler trigger to our local notification dispatch pipeline
     this.scheduler.registerNotificationCallback(
       async (userId, title, msg, category, priority) => {
         await this.dispatchNotification(userId, title, msg, category, priority);
-      }
+      },
     );
   }
 
@@ -28,17 +33,22 @@ export class EngagementService {
     let prefs = await this.prisma.notificationPreference.findUnique({
       where: { userId },
     });
-    
+
     if (!prefs) {
       prefs = await this.prisma.notificationPreference.create({
         data: { userId },
       });
     }
-    
+
     return prefs;
   }
 
-  async isDuplicate(userId: string, category: string, title: string, windowMins = 5): Promise<boolean> {
+  async isDuplicate(
+    userId: string,
+    category: string,
+    title: string,
+    windowMins = 5,
+  ): Promise<boolean> {
     const timeLimit = new Date(Date.now() - windowMins * 60 * 1000);
     const count = await this.prisma.notification.count({
       where: {
@@ -71,7 +81,10 @@ export class EngagementService {
     }
   }
 
-  async incrementEngagementScore(userId: string, actionPoints: number): Promise<number> {
+  async incrementEngagementScore(
+    userId: string,
+    actionPoints: number,
+  ): Promise<number> {
     const scoreRow = await this.prisma.engagementScore.findUnique({
       where: { userId },
     });
@@ -101,20 +114,26 @@ export class EngagementService {
     title: string,
     message: string,
     category: string,
-    priority = 'medium'
+    priority = 'medium',
   ): Promise<boolean> {
-    this.logger.log(`Dispatching notification. User: ${userId}, Title: ${title}, Category: ${category}`);
+    this.logger.log(
+      `Dispatching notification. User: ${userId}, Title: ${title}, Category: ${category}`,
+    );
 
     // 1. Check Deduplication Layer
     const isDup = await this.isDuplicate(userId, category, title);
     if (isDup) {
-      this.logger.warn(`Deduplication: Blocked repeat alert '${title}' for user ${userId}`);
+      this.logger.warn(
+        `Deduplication: Blocked repeat alert '${title}' for user ${userId}`,
+      );
       return false;
     }
 
     // 2. Load preferences & evaluate channels
     const prefs = await this.getPreferences(userId);
-    const userProfile = await this.prisma.user.findUnique({ where: { id: userId } });
+    const userProfile = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
 
     if (!userProfile) {
       this.logger.error(`User profile ${userId} not found.`);
@@ -126,12 +145,14 @@ export class EngagementService {
     if (this._isWithinQuietHours(prefs.quietHoursStart, prefs.quietHoursEnd)) {
       if (priority !== 'critical' && priority !== 'high') {
         channelMutedByQuietHours = true;
-        this.logger.log(`Quiet Hours: Active. Muting channels for notification: ${title}`);
+        this.logger.log(
+          `Quiet Hours: Active. Muting channels for notification: ${title}`,
+        );
       }
     }
 
     // 4. Save to central notification inbox db table
-    const notification = await this.prisma.notification.create({
+    await this.prisma.notification.create({
       data: {
         userId,
         title,
@@ -144,34 +165,38 @@ export class EngagementService {
 
     // 5. Route dispatches based on preferences and quiet hours gating
     if (!channelMutedByQuietHours) {
-      const dispatchPromises: Promise<any>[] = [];
+      const dispatchPromises: Promise<void>[] = [];
 
       if (prefs.emailAlerts && userProfile.email) {
         dispatchPromises.push(
-          this.emailChannel.send(userId, userProfile.email, title, message)
-            .then(ok => this.logDelivery(userId, 'email', ok))
+          this.emailChannel
+            .send(userId, userProfile.email, title, message)
+            .then((ok) => this.logDelivery(userId, 'email', ok)),
         );
       }
       if (prefs.smsAlerts && userProfile.phone) {
         dispatchPromises.push(
-          this.smsChannel.send(userId, userProfile.phone, title, message)
-            .then(ok => this.logDelivery(userId, 'sms', ok))
+          this.smsChannel
+            .send(userId, userProfile.phone, title, message)
+            .then((ok) => this.logDelivery(userId, 'sms', ok)),
         );
       }
       if (prefs.pushAlerts) {
         dispatchPromises.push(
-          this.pushChannel.send(userId, 'browser', title, message)
-            .then(ok => this.logDelivery(userId, 'push', ok))
+          this.pushChannel
+            .send(userId, 'browser', title, message)
+            .then((ok) => this.logDelivery(userId, 'push', ok)),
         );
       }
       if (prefs.whatsappAlerts && userProfile.phone) {
         dispatchPromises.push(
-          this.whatsappChannel.send(userId, userProfile.phone, title, message)
-            .then(ok => this.logDelivery(userId, 'whatsapp', ok))
+          this.whatsappChannel
+            .send(userId, userProfile.phone, title, message)
+            .then((ok) => this.logDelivery(userId, 'whatsapp', ok)),
         );
       }
 
-      await Promise.all(dispatchPromises).catch(err => {
+      await Promise.all(dispatchPromises).catch((err) => {
         this.logger.error(`Error in delivery dispatches: ${err}`);
       });
     }
@@ -179,7 +204,12 @@ export class EngagementService {
     return true;
   }
 
-  async logDelivery(userId: string, channel: string, success: boolean, errorMsg?: string) {
+  async logDelivery(
+    userId: string,
+    channel: string,
+    success: boolean,
+    errorMsg?: string,
+  ) {
     await this.prisma.deliveryLog.create({
       data: {
         userId,
@@ -193,7 +223,7 @@ export class EngagementService {
   async dispatchTemplateNotification(
     userId: string,
     templateKey: string,
-    variables: Record<string, string | number>
+    variables: Record<string, string | number>,
   ): Promise<boolean> {
     const rendered = renderTemplate(templateKey, variables);
     return this.dispatchNotification(
@@ -201,7 +231,7 @@ export class EngagementService {
       rendered.title,
       rendered.message,
       rendered.category,
-      rendered.priority
+      rendered.priority,
     );
   }
 }

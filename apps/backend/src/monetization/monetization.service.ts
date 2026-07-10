@@ -1,9 +1,10 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { StripeProviderService } from './providers/stripe-provider.service';
 import { RazorpayProviderService } from './providers/razorpay-provider.service';
 import { SUBSCRIPTION_PLANS } from './plans.config';
 import { PaymentOrderResponse } from './providers/payment-provider.interface';
+import { WebhookPayload } from '../common/interfaces';
 
 @Injectable()
 export class MonetizationService {
@@ -12,21 +13,23 @@ export class MonetizationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stripe: StripeProviderService,
-    private readonly razorpay: RazorpayProviderService
+    private readonly razorpay: RazorpayProviderService,
   ) {}
 
   private _getProvider(gateway: string) {
     const gw = gateway.toLowerCase();
     if (gw === 'stripe') return this.stripe;
     if (gw === 'razorpay') return this.razorpay;
-    throw new BadRequestException(`Unsupported payment provider gateway: ${gateway}`);
+    throw new BadRequestException(
+      `Unsupported payment provider gateway: ${gateway}`,
+    );
   }
 
   async getActiveSubscription(userId: string) {
     let sub = await this.prisma.subscription.findFirst({
       where: { userId, status: 'active' },
     });
-    
+
     if (!sub) {
       // Default auto initialization
       sub = await this.prisma.subscription.create({
@@ -37,24 +40,38 @@ export class MonetizationService {
         },
       });
     }
-    
+
     return sub;
   }
 
-  async checkout(userId: string, planName: string, gateway: string): Promise<PaymentOrderResponse> {
-    this.logger.log(`Initiating checkout. User: ${userId}, Plan: ${planName}, Gateway: ${gateway}`);
+  async checkout(
+    userId: string,
+    planName: string,
+    gateway: string,
+  ): Promise<PaymentOrderResponse> {
+    this.logger.log(
+      `Initiating checkout. User: ${userId}, Plan: ${planName}, Gateway: ${gateway}`,
+    );
 
     const plan = SUBSCRIPTION_PLANS[planName.toUpperCase()];
     if (!plan) {
-      throw new BadRequestException(`Invalid subscription plan tier requested: ${planName}`);
+      throw new BadRequestException(
+        `Invalid subscription plan tier requested: ${planName}`,
+      );
     }
 
     if (plan.price === 0) {
-      throw new BadRequestException(`Cannot checkout Free tier subscriptions via payment gateway.`);
+      throw new BadRequestException(
+        `Cannot checkout Free tier subscriptions via payment gateway.`,
+      );
     }
 
     const provider = this._getProvider(gateway);
-    const order = await provider.createOrder(userId, planName.toUpperCase(), plan.price);
+    const order = await provider.createOrder(
+      userId,
+      planName.toUpperCase(),
+      plan.price,
+    );
 
     // Save pending payment record in db
     await this.prisma.payment.create({
@@ -71,30 +88,39 @@ export class MonetizationService {
     return order;
   }
 
-  async handleWebhook(gateway: string, payload: any, signature: string): Promise<void> {
+  async handleWebhook(
+    gateway: string,
+    payload: WebhookPayload,
+    signature: string,
+  ): Promise<void> {
     this.logger.log(`Received webhook from gateway: ${gateway}`);
 
     const provider = this._getProvider(gateway);
     const rawPayload = JSON.stringify(payload);
-    
+
     // Webhook Signature verification safety check
     const isVerified = provider.verifyWebhookSignature(rawPayload, signature);
     if (!isVerified) {
-      this.logger.error(`Webhook Signature verification FAILED for gateway ${gateway}`);
+      this.logger.error(
+        `Webhook Signature verification FAILED for gateway ${gateway}`,
+      );
       throw new BadRequestException('Webhook signature validation failed.');
     }
 
     // Determine event action
     const eventType = payload.event || payload.type || 'payment.success';
-    const orderId = payload.orderId || payload.id || (payload.data?.object?.id) || 'mock_order';
-    
+    const orderId =
+      payload.orderId || payload.id || payload.data?.object?.id || 'mock_order';
+
     // Look up pending payment record
     const payment = await this.prisma.payment.findUnique({
       where: { orderId },
     });
 
     if (!payment) {
-      this.logger.warn(`No matching payment record found for order ${orderId}. Processing custom/duplicate event.`);
+      this.logger.warn(
+        `No matching payment record found for order ${orderId}. Processing custom/duplicate event.`,
+      );
       // Mock payment for orphan webhook test events
       return;
     }
@@ -108,7 +134,10 @@ export class MonetizationService {
       },
     });
 
-    if (eventType.includes('success') || eventType === 'checkout.session.completed') {
+    if (
+      eventType.includes('success') ||
+      eventType === 'checkout.session.completed'
+    ) {
       // 1. Mark payment completed
       await this.prisma.payment.update({
         where: { id: payment.id },
@@ -133,7 +162,9 @@ export class MonetizationService {
       let tier = 'FREE';
       if (payment.amount.toNumber() === SUBSCRIPTION_PLANS.PREMIUM.price) {
         tier = 'PREMIUM';
-      } else if (payment.amount.toNumber() === SUBSCRIPTION_PLANS.PREMIUM_PLUS.price) {
+      } else if (
+        payment.amount.toNumber() === SUBSCRIPTION_PLANS.PREMIUM_PLUS.price
+      ) {
         tier = 'PREMIUM_PLUS';
       }
 
@@ -173,7 +204,9 @@ export class MonetizationService {
         data: { role: tier },
       });
 
-      this.logger.log(`Successfully upgraded user ${payment.userId} subscription to ${tier}`);
+      this.logger.log(
+        `Successfully upgraded user ${payment.userId} subscription to ${tier}`,
+      );
     } else if (eventType.includes('failed') || eventType.includes('canceled')) {
       // Mark payment failed
       await this.prisma.payment.update({
@@ -248,9 +281,11 @@ export class MonetizationService {
     userId: string,
     tier: string,
     credits: number,
-    expiryDays: number
+    expiryDays: number,
   ) {
-    this.logger.log(`Admin override: Adjusting User ${userId} -> Tier: ${tier}, Credits: ${credits}`);
+    this.logger.log(
+      `Admin override: Adjusting User ${userId} -> Tier: ${tier}, Credits: ${credits}`,
+    );
 
     const plan = SUBSCRIPTION_PLANS[tier.toUpperCase()];
     if (!plan) {

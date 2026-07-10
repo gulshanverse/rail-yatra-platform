@@ -38,8 +38,9 @@ export default function Login() {
 
       setAuth(result.data.accessToken, result.data.user);
       router.push('/');
-    } catch (err: any) {
-      setError(err.message || 'Connecting to backend failed. Make sure the backend server is running.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connecting to backend failed. Make sure the backend server is running.';
+      setError(message);
     } finally {
       setLoading(false);
     }

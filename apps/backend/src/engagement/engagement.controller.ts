@@ -10,19 +10,12 @@ import {
   Req,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma.service';
 import { EngagementService } from './engagement.service';
 import { ReminderSchedulerService } from './scheduler.service';
-
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-    fullName: string;
-    role: string;
-  };
-}
+import type { AuthenticatedRequest } from '../common/interfaces';
 
 @Controller('api/engagement')
 @UseGuards(JwtAuthGuard)
@@ -30,20 +23,20 @@ export class EngagementController {
   constructor(
     private readonly engagementService: EngagementService,
     private readonly scheduler: ReminderSchedulerService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get('notifications')
   async getNotifications(
     @Req() req: AuthenticatedRequest,
     @Query('filter') filter?: 'unread' | 'read' | 'all',
-    @Query('category') category?: string
+    @Query('category') category?: string,
   ) {
-    const where: any = { userId: req.user.id };
-    
+    const where: Prisma.NotificationWhereInput = { userId: req.user.id };
+
     if (filter === 'unread') where.read = false;
     else if (filter === 'read') where.read = true;
-    
+
     if (category) where.category = category;
 
     return this.prisma.notification.findMany({
@@ -68,7 +61,10 @@ export class EngagementController {
     });
 
     // Award user +5 points for opening/reading notification
-    const totalScore = await this.engagementService.incrementEngagementScore(req.user.id, 5);
+    const totalScore = await this.engagementService.incrementEngagementScore(
+      req.user.id,
+      5,
+    );
 
     return { success: true, updated, engagementScore: totalScore };
   }
@@ -90,7 +86,8 @@ export class EngagementController {
   @Patch('preferences')
   async updatePreferences(
     @Req() req: AuthenticatedRequest,
-    @Body() body: {
+    @Body()
+    body: {
       emailAlerts?: boolean;
       smsAlerts?: boolean;
       pushAlerts?: boolean;
@@ -99,7 +96,7 @@ export class EngagementController {
       quietHoursEnd?: string;
       marketingAlerts?: boolean;
       digestPreference?: string;
-    }
+    },
   ) {
     return this.prisma.notificationPreference.update({
       where: { userId: req.user.id },
@@ -121,7 +118,8 @@ export class EngagementController {
         data: {
           userId: req.user.id,
           title: 'AI Smart Recommendation: Save on Bhopal Corridors',
-          content: 'We noticed you check flights/trains to Bhopal frequently. Dynamic waiting times are lower on Thursdays. Booking the Shatabdi Express on Thursday can save you 1.5 hours in transit time.',
+          content:
+            'We noticed you check flights/trains to Bhopal frequently. Dynamic waiting times are lower on Thursdays. Booking the Shatabdi Express on Thursday can save you 1.5 hours in transit time.',
         },
       });
       return [defaultInsight];
@@ -141,7 +139,13 @@ export class EngagementController {
   @Post('reminders')
   async createReminder(
     @Req() req: AuthenticatedRequest,
-    @Body() body: { title: string; description: string; triggerTime: string; type: string }
+    @Body()
+    body: {
+      title: string;
+      description: string;
+      triggerTime: string;
+      type: string;
+    },
   ) {
     const time = new Date(body.triggerTime);
     const schedule = await this.scheduler.addReminder(
@@ -149,7 +153,7 @@ export class EngagementController {
       body.title,
       body.description,
       time,
-      body.type
+      body.type,
     );
     return { success: true, schedule };
   }

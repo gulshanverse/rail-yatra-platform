@@ -1,22 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { 
   Sparkles, 
   ArrowLeft, 
   Check, 
-  ChevronRight, 
   CreditCard, 
-  Database, 
   Gauge, 
-  HelpCircle, 
   Download, 
   Clock, 
   X,
   AlertCircle,
-  Zap,
   Info
 } from 'lucide-react';
 
@@ -50,7 +46,7 @@ interface SubscriptionDetails {
 }
 
 export default function SubscriptionHub() {
-  const { token, user } = useAuthStore();
+  const { token } = useAuthStore();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -59,15 +55,7 @@ export default function SubscriptionHub() {
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    if (!token) {
-      router.push('/login');
-    } else {
-      loadBillingData();
-    }
-  }, [token]);
-
-  const loadBillingData = async () => {
+  const loadBillingData = useCallback(async () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${token}` };
@@ -86,7 +74,18 @@ export default function SubscriptionHub() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      router.push('/login');
+    } else {
+      const timer = setTimeout(() => {
+        void loadBillingData();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [token, router, loadBillingData]);
 
   const handleCheckout = async (planName: string) => {
     setCheckoutLoading(planName);
@@ -129,9 +128,10 @@ export default function SubscriptionHub() {
         throw new Error('Webhook reconciliation failed.');
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setMessage({ type: 'error', text: err.message || 'Checkout failed. Please try again.' });
+      const message = err instanceof Error ? err.message : 'Checkout failed. Please try again.';
+      setMessage({ type: 'error', text: message });
     } finally {
       setCheckoutLoading(null);
     }

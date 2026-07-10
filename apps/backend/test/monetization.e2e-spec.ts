@@ -3,11 +3,12 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma.service';
+import { User } from '@prisma/client';
 
 describe('Monetization Module (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let mockUser: any;
+  let mockUser: User;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -39,19 +40,22 @@ describe('Monetization Module (e2e)', () => {
   });
 
   it('/api/monetization/plans (GET) should retrieve plan definitions', () => {
-    return request(app.getHttpServer())
+    return request(app.getHttpServer() as import('http').Server)
       .get('/api/monetization/plans')
       .expect(200)
-      .expect((res) => {
-        expect(res.body).toHaveProperty('FREE');
-        expect(res.body).toHaveProperty('PREMIUM');
-        expect(res.body.PREMIUM.price).toBe(299);
+      .expect((res: request.Response) => {
+        const body = res.body as Record<string, { price: number }>;
+        expect(body).toHaveProperty('FREE');
+        expect(body).toHaveProperty('PREMIUM');
+        expect(body.PREMIUM.price).toBe(299);
       });
   });
 
   it('/api/monetization/webhooks/stripe (POST) should process webhooks with signature checks', async () => {
     // Generate a payment order record first to map webhook
-    await prisma.payment.delete({ where: { orderId: 'cs_test_webhook_order_123' } }).catch(() => {});
+    await prisma.payment
+      .delete({ where: { orderId: 'cs_test_webhook_order_123' } })
+      .catch(() => {});
     const payment = await prisma.payment.create({
       data: {
         orderId: 'cs_test_webhook_order_123',
@@ -67,7 +71,7 @@ describe('Monetization Module (e2e)', () => {
       id: 'cs_test_webhook_order_123',
     };
 
-    await request(app.getHttpServer())
+    await request(app.getHttpServer() as import('http').Server)
       .post('/api/monetization/webhooks/stripe')
       .set('x-webhook-signature', 'stripe_test_sig')
       .send(webhookBody)
@@ -77,16 +81,19 @@ describe('Monetization Module (e2e)', () => {
     const updatedPayment = await prisma.payment.findUnique({
       where: { id: payment.id },
     });
-    expect(updatedPayment.status).toBe('completed');
+    expect(updatedPayment).toBeDefined();
+    expect(updatedPayment!.status).toBe('completed');
 
     const sub = await prisma.subscription.findFirst({
       where: { userId: mockUser.id, tier: 'PREMIUM' },
     });
     expect(sub).toBeDefined();
-    expect(sub.status).toBe('active');
-    
+    expect(sub!.status).toBe('active');
+
     // Clean up payment and subscription
     await prisma.payment.delete({ where: { id: payment.id } }).catch(() => {});
-    await prisma.subscription.deleteMany({ where: { userId: mockUser.id } }).catch(() => {});
+    await prisma.subscription
+      .deleteMany({ where: { userId: mockUser.id } })
+      .catch(() => {});
   });
 });

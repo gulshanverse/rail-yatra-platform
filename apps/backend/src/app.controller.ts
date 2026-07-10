@@ -25,15 +25,15 @@ export class AppController {
         timestamp: new Date().toISOString(),
         database: 'connected',
       };
-    } catch (error) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       throw new InternalServerErrorException({
         status: 'unhealthy',
         service: 'backend-core',
         timestamp: new Date().toISOString(),
         database: 'disconnected',
-        error: error.message || error,
+        error: errorMessage,
       });
     }
   }
 }
-

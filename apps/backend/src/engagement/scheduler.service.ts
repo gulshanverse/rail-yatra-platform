@@ -1,25 +1,50 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
-export class ReminderSchedulerService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class ReminderSchedulerService
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly logger = new Logger(ReminderSchedulerService.name);
   private intervalId: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
   // We expose a callback binder to avoid circular dependencies with EngagementService
-  private notificationCallback: ((userId: string, title: string, message: string, category: string, priority: string) => Promise<void>) | null = null;
+  private notificationCallback:
+    | ((
+        userId: string,
+        title: string,
+        message: string,
+        category: string,
+        priority: string,
+      ) => Promise<void>)
+    | null = null;
 
   constructor(private readonly prisma: PrismaService) {}
 
-  registerNotificationCallback(callback: (userId: string, title: string, message: string, category: string, priority: string) => Promise<void>) {
+  registerNotificationCallback(
+    callback: (
+      userId: string,
+      title: string,
+      message: string,
+      category: string,
+      priority: string,
+    ) => Promise<void>,
+  ) {
     this.notificationCallback = callback;
   }
 
   onApplicationBootstrap() {
     this.logger.log('Bootstrapping engagement reminders scheduler loop...');
     // Scan pending schedules every 10 seconds for testing/development responsiveness
-    this.intervalId = setInterval(() => this.processPendingSchedules(), 10000);
+    this.intervalId = setInterval(() => {
+      void this.processPendingSchedules();
+    }, 10000);
   }
 
   onApplicationShutdown() {
@@ -43,7 +68,9 @@ export class ReminderSchedulerService implements OnApplicationBootstrap, OnAppli
       });
 
       if (pendingSchedules.length > 0) {
-        this.logger.log(`Found ${pendingSchedules.length} pending reminders ready to trigger.`);
+        this.logger.log(
+          `Found ${pendingSchedules.length} pending reminders ready to trigger.`,
+        );
       }
 
       for (const schedule of pendingSchedules) {
@@ -55,7 +82,7 @@ export class ReminderSchedulerService implements OnApplicationBootstrap, OnAppli
               schedule.title,
               schedule.description,
               'Journey',
-              'high'
+              'high',
             );
           }
 
@@ -65,9 +92,13 @@ export class ReminderSchedulerService implements OnApplicationBootstrap, OnAppli
             data: { status: 'sent' },
           });
 
-          this.logger.log(`Reminder '${schedule.title}' dispatched to user ${schedule.userId}`);
+          this.logger.log(
+            `Reminder '${schedule.title}' dispatched to user ${schedule.userId}`,
+          );
         } catch (err) {
-          this.logger.error(`Failed to trigger reminder ${schedule.id}: ${err}`);
+          this.logger.error(
+            `Failed to trigger reminder ${schedule.id}: ${err}`,
+          );
           await this.prisma.reminderSchedule.update({
             where: { id: schedule.id },
             data: { status: 'failed' },
@@ -87,9 +118,11 @@ export class ReminderSchedulerService implements OnApplicationBootstrap, OnAppli
     description: string,
     triggerTime: Date,
     reminderType: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ) {
-    this.logger.log(`Scheduling reminder: ${title} for user ${userId} at ${triggerTime.toISOString()}`);
+    this.logger.log(
+      `Scheduling reminder: ${title} for user ${userId} at ${triggerTime.toISOString()}`,
+    );
     return this.prisma.reminderSchedule.create({
       data: {
         userId,

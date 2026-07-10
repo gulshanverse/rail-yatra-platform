@@ -10,9 +10,11 @@ export class FeatureGateService {
 
   async checkEntitlement(
     userId: string,
-    action: 'ai_message' | 'journey_analysis' | 'pnr_check' | 'save_route'
+    action: 'ai_message' | 'journey_analysis' | 'pnr_check' | 'save_route',
   ): Promise<{ allowed: boolean; remaining: number; limit: number }> {
-    this.logger.log(`Checking entitlements for user ${userId}, action: ${action}`);
+    this.logger.log(
+      `Checking entitlements for user ${userId}, action: ${action}`,
+    );
 
     // 1. Fetch user subscription details (fallback to FREE default)
     let sub = await this.prisma.subscription.findFirst({
@@ -54,7 +56,9 @@ export class FeatureGateService {
 
     if (action === 'pnr_check') {
       // Limit of active monitoring histories
-      const activePnrs = await this.prisma.pnrHistory.count({ where: { userId } });
+      const activePnrs = await this.prisma.pnrHistory.count({
+        where: { userId },
+      });
       const limit = plan.pnrMonitorLimit;
       const remaining = Math.max(0, limit - activePnrs);
       return { allowed: remaining > 0, remaining, limit };
@@ -62,7 +66,9 @@ export class FeatureGateService {
 
     if (action === 'save_route') {
       // Limit of active saved junctions
-      const savedRoutes = await this.prisma.savedRoute.count({ where: { userId } });
+      const savedRoutes = await this.prisma.savedRoute.count({
+        where: { userId },
+      });
       const limit = plan.savedRoutesLimit;
       const remaining = Math.max(0, limit - savedRoutes);
       return { allowed: remaining > 0, remaining, limit };
@@ -73,7 +79,7 @@ export class FeatureGateService {
 
   async logUsage(userId: string, action: string): Promise<void> {
     this.logger.log(`Logging usage: user ${userId}, action: ${action}`);
-    
+
     // Write usage record
     await this.prisma.usageLog.create({
       data: { userId, action },
@@ -84,7 +90,7 @@ export class FeatureGateService {
       const activeSub = await this.prisma.subscription.findFirst({
         where: { userId, status: 'active' },
       });
-      
+
       if (activeSub && activeSub.credits > 0) {
         await this.prisma.subscription.update({
           where: { id: activeSub.id },
@@ -96,12 +102,12 @@ export class FeatureGateService {
 
   async enforceEntitlement(
     userId: string,
-    action: 'ai_message' | 'journey_analysis' | 'pnr_check' | 'save_route'
+    action: 'ai_message' | 'journey_analysis' | 'pnr_check' | 'save_route',
   ): Promise<void> {
     const result = await this.checkEntitlement(userId, action);
     if (!result.allowed) {
       throw new ForbiddenException(
-        `Quota Exceeded: You have exhausted your plan limit for ${action}. (Limit: ${result.limit}). Please upgrade your RailYatra subscription.`
+        `Quota Exceeded: You have exhausted your plan limit for ${action}. (Limit: ${result.limit}). Please upgrade your RailYatra subscription.`,
       );
     }
   }

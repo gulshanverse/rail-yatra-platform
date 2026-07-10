@@ -16,15 +16,7 @@ import {
 import * as express from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma.service';
-
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-    fullName: string;
-    role: string;
-  };
-}
+import type { AuthenticatedRequest } from '../common/interfaces';
 
 @Controller('api/conversations')
 @UseGuards(JwtAuthGuard)
@@ -46,7 +38,10 @@ export class ConversationsController {
   }
 
   @Post()
-  async createConversation(@Req() req: AuthenticatedRequest, @Body() body: { summary?: string }) {
+  async createConversation(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { summary?: string },
+  ) {
     return this.prisma.conversation.create({
       data: {
         userId: req.user.id,
@@ -132,7 +127,7 @@ export class ConversationsController {
   async streamChat(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-    @Body() body: { message: string; context?: any },
+    @Body() body: { message: string; context?: Record<string, unknown> },
     @Res() res: express.Response,
   ) {
     const conversation = await this.prisma.conversation.findUnique({
@@ -157,7 +152,7 @@ export class ConversationsController {
     });
 
     // 2. Call FastAPI streaming endpoint
-    let fastapiResponse;
+    let fastapiResponse: Response;
     try {
       fastapiResponse = await fetch('http://localhost:8000/chat/stream', {
         method: 'POST',
@@ -172,8 +167,9 @@ export class ConversationsController {
         }),
       });
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
       throw new InternalServerErrorException(
-        `AI Core service is currently offline or unreachable: ${e.message}`,
+        `AI Core service is currently offline or unreachable: ${errMsg}`,
       );
     }
 
@@ -203,11 +199,14 @@ export class ConversationsController {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.substring(6));
-              if (data.type === 'token') {
+              const data = JSON.parse(line.substring(6)) as {
+                type?: string;
+                value?: string;
+              };
+              if (data.type === 'token' && typeof data.value === 'string') {
                 assistantReply += data.value;
               }
-            } catch (err) {
+            } catch {
               // Ignore partial JSON parsing failures
             }
           }

@@ -1,16 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma.service';
 import { AdminService } from '../src/admin/admin.service';
+import { User } from '@prisma/client';
+import { hasPermission } from '../src/admin/permissions.config';
 
 describe('Admin Module (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let adminService: AdminService;
-  let mockUser: any;
-  let mockAdmin: any;
+  let mockUser: User;
+  let mockAdmin: User;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -49,17 +50,18 @@ describe('Admin Module (e2e)', () => {
       await prisma.user.delete({ where: { id: mockUser.id } }).catch(() => {});
     }
     if (mockAdmin) {
-      await prisma.auditLog.deleteMany({ where: { actorId: mockAdmin.id } }).catch(() => {});
+      await prisma.auditLog
+        .deleteMany({ where: { actorId: mockAdmin.id } })
+        .catch(() => {});
       await prisma.user.delete({ where: { id: mockAdmin.id } }).catch(() => {});
     }
     await app.close();
   });
 
-  it('should deny dashboard access to standard users (403)', async () => {
+  it('should deny dashboard access to standard users (403)', () => {
     // In our E2E environment, we mock JwtAuthGuard request decoding.
     // However, we can call the service directly to test RBAC logic, or hit HTTP.
     // Let's directly verify hasPermission logic and audit log entries generation.
-    const { hasPermission } = require('../src/admin/permissions.config');
     const hasDashboardAccess = hasPermission('USER', 'admin:dashboard:view');
     expect(hasDashboardAccess).toBe(false);
 
@@ -95,7 +97,7 @@ describe('Admin Module (e2e)', () => {
     expect(logEntry).toBeDefined();
     expect(logEntry.affectedResource).toBe(`Config:${key}`);
     expect(logEntry.actionResult).toBe('success');
-    
+
     // Clean up
     await prisma.systemConfiguration.delete({ where: { key } }).catch(() => {});
   });

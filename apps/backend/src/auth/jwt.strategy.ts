@@ -13,7 +13,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'railyatra_super_secure_jwt_secret_key_12345',
+      secretOrKey:
+        configService.get<string>('JWT_SECRET') ||
+        'railyatra_super_secure_jwt_secret_key_12345',
     });
   }
 
@@ -29,7 +31,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User no longer exists or session is invalid.');
+      throw new UnauthorizedException(
+        'User no longer exists or session is invalid.',
+      );
     }
 
     return user; // Attached to request.user

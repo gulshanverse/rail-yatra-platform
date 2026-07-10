@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma.service';
 import { EngagementService } from '../src/engagement/engagement.service';
+import { User } from '@prisma/client';
 
 describe('Engagement Module (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let engagementService: EngagementService;
-  let mockUser: any;
+  let mockUser: User;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -36,10 +36,18 @@ describe('Engagement Module (e2e)', () => {
 
   afterAll(async () => {
     if (mockUser) {
-      await prisma.notification.deleteMany({ where: { userId: mockUser.id } }).catch(() => {});
-      await prisma.notificationPreference.deleteMany({ where: { userId: mockUser.id } }).catch(() => {});
-      await prisma.deliveryLog.deleteMany({ where: { userId: mockUser.id } }).catch(() => {});
-      await prisma.engagementScore.deleteMany({ where: { userId: mockUser.id } }).catch(() => {});
+      await prisma.notification
+        .deleteMany({ where: { userId: mockUser.id } })
+        .catch(() => {});
+      await prisma.notificationPreference
+        .deleteMany({ where: { userId: mockUser.id } })
+        .catch(() => {});
+      await prisma.deliveryLog
+        .deleteMany({ where: { userId: mockUser.id } })
+        .catch(() => {});
+      await prisma.engagementScore
+        .deleteMany({ where: { userId: mockUser.id } })
+        .catch(() => {});
       await prisma.user.delete({ where: { id: mockUser.id } }).catch(() => {});
     }
     await app.close();
@@ -58,11 +66,23 @@ describe('Engagement Module (e2e)', () => {
     const msg = 'Checking spam prevention layer.';
 
     // Send first notification
-    const res1 = await engagementService.dispatchNotification(mockUser.id, title, msg, 'PNR', 'high');
+    const res1 = await engagementService.dispatchNotification(
+      mockUser.id,
+      title,
+      msg,
+      'PNR',
+      'high',
+    );
     expect(res1).toBe(true);
 
     // Send second identical notification within the deduplication window
-    const res2 = await engagementService.dispatchNotification(mockUser.id, title, msg, 'PNR', 'high');
+    const res2 = await engagementService.dispatchNotification(
+      mockUser.id,
+      title,
+      msg,
+      'PNR',
+      'high',
+    );
     expect(res2).toBe(false); // blocked by deduplication layer
 
     const dbCount = await prisma.notification.count({
@@ -72,7 +92,7 @@ describe('Engagement Module (e2e)', () => {
   });
 
   it('should increase user engagement score when reading alerts', async () => {
-    const notif = await prisma.notification.create({
+    await prisma.notification.create({
       data: {
         userId: mockUser.id,
         title: 'Score Booster Notif',
@@ -89,7 +109,10 @@ describe('Engagement Module (e2e)', () => {
     const startingScore = initScore ? initScore.score : 0;
 
     // Simulate reading via backend method
-    const score = await engagementService.incrementEngagementScore(mockUser.id, 5);
+    const score = await engagementService.incrementEngagementScore(
+      mockUser.id,
+      5,
+    );
     expect(score).toBe(startingScore + 5);
   });
 });

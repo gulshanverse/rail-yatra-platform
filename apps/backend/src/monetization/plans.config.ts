@@ -2,8 +2,8 @@ export interface PlanEntitlements {
   tierName: string;
   price: number;
   currency: string;
-  monthlyCredits: number;        // AI Analysis credits
-  dailyMessagesLimit: number;    // AI chat messages
+  monthlyCredits: number; // AI Analysis credits
+  dailyMessagesLimit: number; // AI chat messages
   pnrMonitorLimit: number;
   savedRoutesLimit: number;
   features: string[];
@@ -18,7 +18,11 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanEntitlements> = {
     dailyMessagesLimit: 10,
     pnrMonitorLimit: 2,
     savedRoutesLimit: 3,
-    features: ['Basic AI Chat', 'Waitlist Predictor (3 runs)', '2 Active PNR Statuses'],
+    features: [
+      'Basic AI Chat',
+      'Waitlist Predictor (3 runs)',
+      '2 Active PNR Statuses',
+    ],
   },
   PREMIUM: {
     tierName: 'Premium Travel',
@@ -28,7 +32,13 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanEntitlements> = {
     dailyMessagesLimit: 100,
     pnrMonitorLimit: 20,
     savedRoutesLimit: 20,
-    features: ['Superfast AI Chat', 'Journey Intelligence Engine Cockpit', 'Alternate Date & Boarding suggestions', 'SMS Delay Notifications', '20 Active PNR Monitoring slots'],
+    features: [
+      'Superfast AI Chat',
+      'Journey Intelligence Engine Cockpit',
+      'Alternate Date & Boarding suggestions',
+      'SMS Delay Notifications',
+      '20 Active PNR Monitoring slots',
+    ],
   },
   PREMIUM_PLUS: {
     tierName: 'Premium Plus Pro',
@@ -38,6 +48,12 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanEntitlements> = {
     dailyMessagesLimit: 9999,
     pnrMonitorLimit: 9999,
     savedRoutesLimit: 9999,
-    features: ['Dedicated AI Core Priority Node', 'Unlimited Waitlist clearances', 'Unlimited Boarding junction analysis', 'Priority WhatsApp/SMS Journey Notifications', 'Ad-Free desktop workspace'],
+    features: [
+      'Dedicated AI Core Priority Node',
+      'Unlimited Waitlist clearances',
+      'Unlimited Boarding junction analysis',
+      'Priority WhatsApp/SMS Journey Notifications',
+      'Ad-Free desktop workspace',
+    ],
   },
 };

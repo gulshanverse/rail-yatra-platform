@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import * as express from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -52,7 +62,9 @@ export class AuthController {
     @Req() request: express.Request,
     @Res({ passthrough: true }) response: express.Response,
   ) {
-    const refreshToken = (request.cookies as any)?.['refresh_token'];
+    const cookies = request.cookies as
+      Record<string, string | undefined> | undefined;
+    const refreshToken = cookies?.['refresh_token'];
     if (!refreshToken) {
       return response.status(HttpStatus.UNAUTHORIZED).json({
         success: false,
@@ -63,8 +75,10 @@ export class AuthController {
       });
     }
 
-    const payload = await this.authService.verifyRefreshToken(refreshToken);
-    const accessToken = await this.authService.generateAccessTokenFromUserId(payload.sub);
+    const payload = this.authService.verifyRefreshToken(refreshToken);
+    const accessToken = await this.authService.generateAccessTokenFromUserId(
+      payload.sub,
+    );
 
     return {
       success: true,
@@ -76,7 +90,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Res({ passthrough: true }) response: express.Response) {
+  logout(@Res({ passthrough: true }) response: express.Response) {
     response.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -90,7 +104,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getMe(@Req() request: any) {
+  getMe(@Req() request: import('../common/interfaces').AuthenticatedRequest) {
     return {
       success: true,
       data: request.user,

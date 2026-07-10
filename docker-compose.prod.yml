@@ -62,6 +62,7 @@ services:
       retries: 5
 
   backend:
+    image: ${REGISTRY_IMAGE_BACKEND:-railyatra-backend}:${BACKEND_IMAGE_TAG:-latest}
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
@@ -88,6 +89,7 @@ services:
     restart: always
 
   ai-service:
+    image: ${REGISTRY_IMAGE_AI_SERVICE:-railyatra-ai-service}:${AI_SERVICE_IMAGE_TAG:-latest}
     build:
       context: ./apps/ai-service
       dockerfile: Dockerfile

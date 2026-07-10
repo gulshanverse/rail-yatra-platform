@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import { Server } from 'http';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
@@ -13,17 +14,22 @@ async function bootstrap() {
   const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
-      logger.error(`[FATAL CONFIGURATION ERROR] Missing critical environment variable: ${envVar}. Process aborting.`);
+      logger.error(
+        `[FATAL CONFIGURATION ERROR] Missing critical environment variable: ${envVar}. Process aborting.`,
+      );
       process.exit(1);
     }
   }
 
   const app = await NestFactory.create(AppModule);
-  
+
   // Enable CORS
-  const corsOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*';
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',')
+    : '*';
   app.enableCors({
     origin: corsOrigin,
+    optionsSuccessStatus: 204,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -34,34 +40,41 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
 
   const port = process.env.PORT ?? 5000;
-  const server = await app.listen(port);
+  const server = (await app.listen(port)) as Server;
   logger.log(`[Backend Service] core api running on: http://localhost:${port}`);
 
   // 2. Handle Graceful Shutdown Signal Interrupts
-  const gracefulShutdown = async (signal: string) => {
-    logger.warn(`Received signal ${signal}. Starting graceful shutdown procedure...`);
-    
-    // Stop accepting new connections
-    server.close(async () => {
-      logger.log('Draining active HTTP connection pools completed.');
-      
-      try {
-        // Disconnect DB client pool
-        const prisma = app.get(PrismaService);
-        await prisma.$disconnect();
-        logger.log('Database pool connection closed.');
-      } catch (err) {
-        logger.error(`Error closing database pool connection: ${err}`);
-      }
+  const gracefulShutdown = (signal: string) => {
+    logger.warn(
+      `Received signal ${signal}. Starting graceful shutdown procedure...`,
+    );
 
-      logger.log('Process terminating successfully.');
-      process.exit(0);
+    server.close(() => {
+      logger.log('Draining active HTTP connection pools completed.');
+
+      const closeDb = async () => {
+        try {
+          // Disconnect DB client pool
+          const prisma = app.get(PrismaService);
+          await prisma.$disconnect();
+          logger.log('Database pool connection closed.');
+        } catch (err) {
+          logger.error(`Error closing database pool connection: ${err}`);
+        }
+
+        logger.log('Process terminating successfully.');
+        process.exit(0);
+      };
+
+      void closeDb();
     });
 
     // Enforce hard exit timeout after 10 seconds if connections fail to drain
@@ -74,4 +87,4 @@ async function bootstrap() {
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
-bootstrap();
+void bootstrap();

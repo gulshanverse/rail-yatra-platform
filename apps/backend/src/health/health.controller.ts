@@ -3,7 +3,11 @@ import type { Response } from 'express';
 import { Socket } from 'net';
 import { PrismaService } from '../prisma.service';
 
-function checkTcpConnection(host: string, port: number, timeoutMs = 1500): Promise<boolean> {
+function checkTcpConnection(
+  host: string,
+  port: number,
+  timeoutMs = 1500,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new Socket();
     let connResolved = false;
@@ -37,7 +41,9 @@ export class HealthController {
 
   @Get('live')
   getLive(@Res() res: Response) {
-    return res.status(HttpStatus.OK).json({ status: 'up', timestamp: new Date().toISOString() });
+    return res
+      .status(HttpStatus.OK)
+      .json({ status: 'up', timestamp: new Date().toISOString() });
   }
 
   @Get('ready')
@@ -130,11 +136,16 @@ export class HealthController {
       components: {
         database: { status: dbStatus, latencyMs: dbLatency },
         ai_service: { status: aiStatus, latencyMs: aiLatency },
-        redis: { status: isRedisUp ? 'healthy' : 'unreachable', latencyMs: redisLatency },
-        qdrant: { status: isQdrantUp ? 'healthy' : 'unreachable', latencyMs: qdrantLatency },
-        notification_scheduler: { status: 'healthy', activeJobs: 2 }
-      }
+        redis: {
+          status: isRedisUp ? 'healthy' : 'unreachable',
+          latencyMs: redisLatency,
+        },
+        qdrant: {
+          status: isQdrantUp ? 'healthy' : 'unreachable',
+          latencyMs: qdrantLatency,
+        },
+        notification_scheduler: { status: 'healthy', activeJobs: 2 },
+      },
     });
   }
 }
-

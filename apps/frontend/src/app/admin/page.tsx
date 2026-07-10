@@ -1,29 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { 
-  Sparkles, 
   ArrowLeft, 
   Check, 
-  ChevronRight, 
   Clock, 
   X,
-  AlertCircle,
   Zap,
-  Info,
   Sliders,
   ShieldCheck,
   Activity,
   ToggleLeft,
   ToggleRight,
-  Database,
   Search,
-  Filter,
   RefreshCw,
-  Terminal,
-  Cpu
+  Terminal
 } from 'lucide-react';
 
 interface MetricNode {
@@ -72,6 +65,13 @@ interface AuditLogItem {
   timestamp: string;
 }
 
+interface AnalyticsTotals {
+  totalUsers: number;
+  totalChats: number;
+  totalAnalyses: number;
+  totalRevenue: number;
+}
+
 export default function AdminOperationsHub() {
   const { token, user } = useAuthStore();
   const router = useRouter();
@@ -82,10 +82,9 @@ export default function AdminOperationsHub() {
   // State managers
   const [loading, setLoading] = useState(true);
   const [healthNodes, setHealthNodes] = useState<MetricNode[]>([]);
-  const [analyticsTotals, setAnalyticsTotals] = useState<any>(null);
+  const [analyticsTotals, setAnalyticsTotals] = useState<AnalyticsTotals | null>(null);
   const [analyticsHistory, setAnalyticsHistory] = useState<AnalyticsSnapshot[]>([]);
   const [flags, setFlags] = useState<FeatureFlagItem[]>([]);
-  const [configs, setConfigs] = useState<SystemConfigItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   
   // Controls
@@ -93,18 +92,7 @@ export default function AdminOperationsHub() {
   const [configBanner, setConfigBanner] = useState('');
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    if (!isAdmin) {
-      return; // Handled by inline check below
-    }
-    loadAdminMetrics();
-  }, [token]);
-
-  const loadAdminMetrics = async () => {
+  const loadAdminMetrics = useCallback(async () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${token}` };
@@ -117,18 +105,20 @@ export default function AdminOperationsHub() {
       if (dashRes.ok && healthRes.ok && configRes.ok && auditRes.ok) {
         const dashData = await dashRes.json();
         const healthData = await healthRes.json();
-        const configData = await configRes.json();
+        const configData = (await configRes.json()) as {
+          flags: FeatureFlagItem[];
+          configs: SystemConfigItem[];
+        };
         const auditData = await auditRes.json();
 
         setAnalyticsTotals(dashData.totals);
         setAnalyticsHistory(dashData.history);
         setHealthNodes(healthData);
         setFlags(configData.flags);
-        setConfigs(configData.configs);
         setAuditLogs(auditData);
 
         // Populate banner state
-        const banner = configData.configs.find((c: any) => c.key === 'banner_announcement');
+        const banner = configData.configs.find((c) => c.key === 'banner_announcement');
         if (banner) setConfigBanner(banner.value);
       }
     } catch (err) {
@@ -136,7 +126,21 @@ export default function AdminOperationsHub() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    if (!isAdmin) {
+      return; // Handled by inline check below
+    }
+    const timer = setTimeout(() => {
+      void loadAdminMetrics();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [token, isAdmin, loadAdminMetrics, router]);
 
   const handleToggleFlag = async (name: string, currentEnabled: boolean) => {
     try {

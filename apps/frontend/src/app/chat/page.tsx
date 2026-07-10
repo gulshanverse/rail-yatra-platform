@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { 
@@ -17,12 +17,8 @@ import {
   Check,
   X,
   Clock,
-  HelpCircle,
-  AlertCircle,
   Sliders,
   Gauge,
-  Zap,
-  DollarSign,
   Award,
   ChevronRight,
   Info,
@@ -84,7 +80,13 @@ export default function AIWorkspace() {
 
   // Sidebar states
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('railyatra_pinned_chats');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -108,41 +110,7 @@ export default function AIWorkspace() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!token) {
-      router.push('/login');
-    } else {
-      loadConversations();
-      const savedPins = localStorage.getItem('railyatra_pinned_chats');
-      if (savedPins) {
-        setPinnedIds(JSON.parse(savedPins));
-      }
-    }
-  }, [token]);
-
-  // Keyboard Shortcuts (Ctrl+Enter, Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleSubmit();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        handleNewChat();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [input, activeId, streaming]);
-
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
-
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     try {
       const res = await fetch('http://localhost:5000/api/conversations', {
         headers: { Authorization: `Bearer ${token}` },
@@ -154,7 +122,7 @@ export default function AIWorkspace() {
     } catch (err) {
       console.error('Error loading history:', err);
     }
-  };
+  }, [token]);
 
   const loadActiveConversation = async (id: string) => {
     setActiveId(id);
@@ -177,7 +145,74 @@ export default function AIWorkspace() {
     }
   };
 
-  const handleNewChat = async (initialQuery?: string) => {
+  const sendChatMessage = useCallback(async (convId: string, queryText: string) => {
+    setMessages(prev => [...prev, { role: 'user', content: queryText }]);
+    setStreaming(true);
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/conversations/${convId}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: queryText }),
+      });
+
+      if (!response.body) throw new Error('Readable stream not supported');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              if (data.type === 'token') {
+                accumulated += data.value;
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: 'assistant',
+                    content: accumulated
+                  };
+                  return updated;
+                });
+              } else if (data.type === 'done') {
+                if (data.options && data.options.length > 0) {
+                  setOptions(data.options);
+                  setActiveOptionIndex(0); // auto select first option
+                }
+              }
+            } catch {
+              // Ignore boundary parsing issues
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: 'Connection to RailYatra AI service lost. Please verify your endpoints.' }
+      ]);
+    } finally {
+      setStreaming(false);
+      void loadConversations();
+    }
+  }, [token, loadConversations]);
+
+  const handleNewChat = useCallback(async (initialQuery?: string) => {
     setOptions([]);
     setActiveOptionIndex(null);
     try {
@@ -196,13 +231,29 @@ export default function AIWorkspace() {
         setMessages([]);
         
         if (initialQuery) {
-          setTimeout(() => sendChatMessage(newChat.id, initialQuery), 100);
+          setTimeout(() => {
+            void sendChatMessage(newChat.id, initialQuery);
+          }, 100);
         }
       }
     } catch (err) {
       console.error('Error creating chat:', err);
     }
-  };
+  }, [token, sendChatMessage]);
+
+  const handleSubmit = useCallback((e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!input.trim() || streaming) return;
+    
+    const userQuery = input.trim();
+    setInput('');
+
+    if (!activeId) {
+      void handleNewChat(userQuery);
+    } else {
+      void sendChatMessage(activeId, userQuery);
+    }
+  }, [input, streaming, activeId, handleNewChat, sendChatMessage]);
 
   const handleRename = async (id: string) => {
     if (!editTitle.trim()) return;
@@ -258,86 +309,38 @@ export default function AIWorkspace() {
     localStorage.setItem('railyatra_pinned_chats', JSON.stringify(updatedPins));
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!input.trim() || streaming) return;
-    
-    const userQuery = input.trim();
-    setInput('');
-
-    if (!activeId) {
-      handleNewChat(userQuery);
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!token) {
+      router.push('/login');
     } else {
-      sendChatMessage(activeId, userQuery);
+      const timer = setTimeout(() => {
+        void loadConversations();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [token, loadConversations, router]);
 
-  const sendChatMessage = async (convId: string, queryText: string) => {
-    setMessages(prev => [...prev, { role: 'user', content: queryText }]);
-    setStreaming(true);
-
-    try {
-      const response = await fetch(`http://localhost:5000/api/conversations/${convId}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: queryText }),
-      });
-
-      if (!response.body) throw new Error('Readable stream not supported');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-      let accumulated = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.substring(6));
-              if (data.type === 'token') {
-                accumulated += data.value;
-                setMessages(prev => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: 'assistant',
-                    content: accumulated
-                  };
-                  return updated;
-                });
-              } else if (data.type === 'done') {
-                if (data.options && data.options.length > 0) {
-                  setOptions(data.options);
-                  setActiveOptionIndex(0); // auto select first option
-                }
-              }
-            } catch (err) {
-              // Ignore boundary parsing issues
-            }
-          }
-        }
+  // Keyboard Shortcuts (Ctrl+Enter, Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleSubmit();
       }
-    } catch (err: any) {
-      console.error(err);
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: 'Connection to RailYatra AI service lost. Please verify your endpoints.' }
-      ]);
-    } finally {
-      setStreaming(false);
-      loadConversations();
-    }
-  };
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        handleNewChat();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [input, activeId, streaming, handleSubmit, handleNewChat]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
 
   // Helper local subscore and overall scoring recalculators for dynamic weight adjustments
   const getComfortSub = (bookingClass: string) => {
@@ -362,9 +365,8 @@ export default function AIWorkspace() {
   };
   const getReliabilitySub = (prob: number, delay: number) => {
     const delayPenalty = Math.min(50, (delay / 60) * 25);
-    return Math.round(Math.max(0, (prob * 0.7) + (30 - delay_penalty(delay))));
+    return Math.round(Math.max(0, (prob * 0.7) + (30 - delayPenalty)));
   };
-  const delay_penalty = (delay: number) => Math.min(50, (delay / 60) * 25);
 
   const getOverallScore = (opt: TravelOption) => {
     const sub = {

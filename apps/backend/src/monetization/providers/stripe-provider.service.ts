@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IPaymentProvider, PaymentOrderResponse } from './payment-provider.interface';
+import {
+  IPaymentProvider,
+  PaymentOrderResponse,
+} from './payment-provider.interface';
 
 @Injectable()
 export class StripeProviderService implements IPaymentProvider {
@@ -9,17 +12,23 @@ export class StripeProviderService implements IPaymentProvider {
     return 'stripe';
   }
 
-  async createOrder(userId: string, planName: string, amount: number): Promise<PaymentOrderResponse> {
-    this.logger.log(`Stripe: Creating checkout session for user ${userId}, plan: ${planName}, amount: ${amount}`);
-    
+  createOrder(
+    userId: string,
+    planName: string,
+    amount: number,
+  ): Promise<PaymentOrderResponse> {
+    this.logger.log(
+      `Stripe: Creating checkout session for user ${userId}, plan: ${planName}, amount: ${amount}`,
+    );
+
     // Simulate API request to Stripe and return mock order details
     const mockSessionId = `cs_test_${Math.random().toString(36).substring(7)}`;
-    return {
+    return Promise.resolve({
       orderId: mockSessionId,
       gateway: this.name,
       amount,
-      currency: 'INR'
-    };
+      currency: 'INR',
+    });
   }
 
   verifyWebhookSignature(payload: string, signature: string): boolean {
@@ -29,8 +38,10 @@ export class StripeProviderService implements IPaymentProvider {
     return signature === 'stripe_test_sig' || signature.length > 10;
   }
 
-  async processRefund(paymentId: string, amount: number): Promise<boolean> {
-    this.logger.log(`Stripe: Initiating refund of Rs ${amount} on charge ${paymentId}`);
-    return true;
+  processRefund(paymentId: string, amount: number): Promise<boolean> {
+    this.logger.log(
+      `Stripe: Initiating refund of Rs ${amount} on charge ${paymentId}`,
+    );
+    return Promise.resolve(true);
   }
 }

@@ -38,11 +38,13 @@ export class LoggingInterceptor implements NestInterceptor {
         };
 
         if (duration > 800) {
-          this.logger.warn(`[SLOW PERFORMANCE DETECTION] ${JSON.stringify(logData)}`);
+          this.logger.warn(
+            `[SLOW PERFORMANCE DETECTION] ${JSON.stringify(logData)}`,
+          );
         } else {
           this.logger.log(JSON.stringify(logData));
         }
-      })
+      }),
     );
   }
 }

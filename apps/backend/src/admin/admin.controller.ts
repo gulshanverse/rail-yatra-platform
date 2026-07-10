@@ -27,7 +27,7 @@ interface AuthenticatedRequest extends Request {
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get('dashboard')
@@ -46,9 +46,9 @@ export class AdminController {
   @RequirePermission('admin:audit:view')
   async getAuditLogs(
     @Query('search') search?: string,
-    @Query('action') action?: string
+    @Query('action') action?: string,
   ) {
-    const where: any = {};
+    const where: import('@prisma/client').Prisma.AuditLogWhereInput = {};
     if (search) {
       where.OR = [
         { actorEmail: { contains: search } },
@@ -81,7 +81,7 @@ export class AdminController {
     @Req() req: AuthenticatedRequest,
     @Body() body: { key: string; value: string },
     @Headers('x-forwarded-for') ip: string,
-    @Headers('user-agent') ua: string
+    @Headers('user-agent') ua: string,
   ) {
     return this.adminService.setSystemConfiguration(body.key, body.value, {
       id: req.user.id,
@@ -97,7 +97,7 @@ export class AdminController {
     @Req() req: AuthenticatedRequest,
     @Body() body: { name: string; enabled: boolean },
     @Headers('x-forwarded-for') ip: string,
-    @Headers('user-agent') ua: string
+    @Headers('user-agent') ua: string,
   ) {
     return this.adminService.setFeatureFlag(body.name, body.enabled, {
       id: req.user.id,

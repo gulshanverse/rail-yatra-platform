@@ -1,26 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../store/authStore';
 import FloatingAI from '../components/FloatingAI';
 import { 
   Train, 
   Sparkles, 
-  MessageSquare, 
-  User as UserIcon, 
   Moon, 
   Sun, 
   Compass, 
   LogOut, 
   Cpu, 
   CheckCircle,
-  HelpCircle,
-  ArrowRight,
   TrendingUp,
-  Clock,
-  MapPin
+  HelpCircle
 } from 'lucide-react';
+
+interface AIResponse {
+  reply: string;
+  parsed_intent: string;
+  confidence: number;
+  explanation: string;
+  credits_left: number;
+}
 
 export default function Home() {
   const { user, token, theme, setTheme, clearAuth, setAuth } = useAuthStore();
@@ -28,17 +31,17 @@ export default function Home() {
   
   // Simulation states
   const [query, setQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState<any>(null);
+  const [aiResponse, setAiResponse] = useState<AIResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [credits, setCredits] = useState(3);
   const [activeTab, setActiveTab] = useState<'agent' | 'billing' | 'features'>('agent');
 
-  // Load user default credits
-  useEffect(() => {
-    if (user?.subscriptions?.[0]?.credits !== undefined) {
-      setCredits(user.subscriptions[0].credits);
-    }
-  }, [user]);
+  const [prevUserCredits, setPrevUserCredits] = useState<number | undefined>(undefined);
+  const [credits, setCredits] = useState(3);
+
+  if (user?.subscriptions?.[0]?.credits !== undefined && user.subscriptions[0].credits !== prevUserCredits) {
+    setPrevUserCredits(user.subscriptions[0].credits);
+    setCredits(user.subscriptions[0].credits);
+  }
 
   const handleLogout = () => {
     clearAuth();
@@ -73,7 +76,7 @@ export default function Home() {
 
       const data = await response.json();
       setAiResponse(data);
-    } catch (err) {
+    } catch {
       // Fallback response if AI service is offline
       setAiResponse({
         reply: `Offline AI Engine processed request: "${query}"`,
@@ -280,14 +283,14 @@ export default function Home() {
                       onClick={() => handleSimulateQuery('I want to travel from Bilaspur to New Delhi next Friday')}
                       className="text-xs bg-muted hover:bg-muted/75 px-3 py-1.5 rounded-lg border border-border transition-colors cursor-pointer"
                     >
-                      "Bilaspur to Delhi next Friday"
+                      &quot;Bilaspur to Delhi next Friday&quot;
                     </button>
                     <button 
                       type="button"
                       onClick={() => handleSimulateQuery('My ticket waitlist is WL 23. What are my confirmation chances?')}
                       className="text-xs bg-muted hover:bg-muted/75 px-3 py-1.5 rounded-lg border border-border transition-colors cursor-pointer"
                     >
-                      "Waitlist WL 23 chances?"
+                      &quot;Waitlist WL 23 chances?&quot;
                     </button>
                   </div>
                 </form>
@@ -308,7 +311,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  {aiLoading ? (
+                  {aiLoading || !aiResponse ? (
                     <div className="space-y-3 py-4">
                       <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
                       <div className="h-4 bg-muted rounded animate-pulse w-1/2" />

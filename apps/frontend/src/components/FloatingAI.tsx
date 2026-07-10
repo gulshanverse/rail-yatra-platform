@@ -99,13 +99,13 @@ export default function FloatingAI() {
                   return updated;
                 });
               }
-            } catch (err) {
+            } catch {
               // Ignore boundary parser errors
             }
           }
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setMessages(prev => [
         ...prev,
