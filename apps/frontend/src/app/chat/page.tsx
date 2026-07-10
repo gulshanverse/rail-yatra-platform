@@ -469,12 +469,21 @@ export default function AIWorkspace() {
       {/* Sidebar */}
       <aside className="w-80 border-r border-border bg-muted/20 flex flex-col h-full shrink-0">
         <div className="p-4 border-b border-border flex flex-col gap-3 shrink-0">
-          <button 
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-          </button>
+          <div className="flex justify-between items-center">
+            <button 
+              onClick={() => router.push('/')}
+              className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+            </button>
+            <button 
+              onClick={() => router.push('/settings')}
+              className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              title="Settings & Personalizations"
+            >
+              <Sliders className="h-3.5 w-3.5" /> Settings
+            </button>
+          </div>
           
           <button
             onClick={() => handleNewChat()}

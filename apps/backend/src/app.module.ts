@@ -6,6 +6,7 @@ import { PrismaService } from './prisma.service';
 import { AuthModule } from './auth/auth.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { MonetizationModule } from './monetization/monetization.module';
+import { EngagementModule } from './engagement/engagement.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { MonetizationModule } from './monetization/monetization.module';
     AuthModule,
     ConversationsModule,
     MonetizationModule,
+    EngagementModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
