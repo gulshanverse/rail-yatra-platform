@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
 class UserPreferences(BaseModel):
     comfort: float = Field(default=1.0, description="Multiplier for comfort preference (1A/2A/CC classes)")
