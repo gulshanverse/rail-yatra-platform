@@ -167,3 +167,63 @@ model BillingEvent {
   payload     String   // JSON string of event body
   timestamp   DateTime @default(now())
 }
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  category  String   @default("System") // Journey, PNR, AI, Billing, Marketing, System
+  priority  String   @default("medium") // low, medium, high, critical
+  read      Boolean  @default(false)
+  channel   String   // email, sms, push, whatsapp
+  timestamp DateTime @default(now())
+}
+
+model NotificationPreference {
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  emailAlerts    Boolean @default(true)
+  smsAlerts      Boolean @default(false)
+  pushAlerts     Boolean @default(true)
+  whatsappAlerts Boolean @default(false)
+  quietHoursStart String @default("22:00") // HH:MM format
+  quietHoursEnd   String @default("06:00")
+  marketingAlerts Boolean @default(false)
+  digestPreference String @default("instant") // instant, daily_digest, weekly_digest
+}
+
+model ReminderSchedule {
+  id           String   @id @default(uuid())
+  userId       String
+  title        String
+  description  String
+  triggerTime  DateTime
+  status       String   @default("pending") // pending, sent, failed
+  reminderType String   // journey_preparation, booking_window, subscription_expiry
+  metadata     String?  // JSON string parameters
+}
+
+model UserInsight {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  content   String   // AI-generated personalization travel recommendation summary
+  timestamp DateTime @default(now())
+}
+
+model DeliveryLog {
+  id        String   @id @default(uuid())
+  userId    String
+  channel   String
+  status    String   // success, failed
+  errorMsg  String?
+  timestamp DateTime @default(now())
+}
+
+model EngagementScore {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  score         Int      @default(0)
+  lastTriggered DateTime @default(now())
+}
