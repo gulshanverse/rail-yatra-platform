@@ -1,6 +1,6 @@
 import unittest
 import asyncio
-from app.data.models import DataQualityMetadata, NormalizedTrain
+from app.data.models import DataQualityMetadata
 from app.data.cache import railway_cache_manager
 from app.data.health import provider_health_monitor
 from app.data.manager import railway_data_manager

@@ -1,6 +1,6 @@
 import logging
-from typing import TypedDict, Dict, Any, List, Annotated
-from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Dict, Any, List
+from langgraph.graph import StateGraph, END
 
 # Import specialized agents
 from app.agents.travel_decision import TravelDecisionAgent

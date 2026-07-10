@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List
-from app.engine.models import UserPreferences, TravelOption
+from app.engine.models import UserPreferences
 
 logger = logging.getLogger("ai-service.engine.scoring")
 

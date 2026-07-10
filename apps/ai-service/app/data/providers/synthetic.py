@@ -1,6 +1,6 @@
 import time
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from app.data.providers.base import BaseRailwayProvider
 from app.data.models import (
     NormalizedTrain,
@@ -12,9 +12,7 @@ from app.data.models import (
 )
 from app.tools.train_search import TRAINS_DATABASE
 from app.engine.dataset import (
-    get_train_delay_metrics,
-    get_wl_clearance_probability,
-    ADJACENT_STATIONS_MAP
+    get_train_delay_metrics
 )
 from app.tools.pnr import get_pnr_status as get_pnr_mock
 
@@ -111,7 +109,6 @@ class SyntheticRailwayProvider(BaseRailwayProvider):
             return None
             
         # Parse PNR probability mapping
-        prob_str = res.get("confirmation_probability", "100.0%").replace("%", "")
         
         return NormalizedPnrStatus(
             pnr=pnr,

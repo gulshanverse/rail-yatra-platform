@@ -1,6 +1,6 @@
 import logging
 import httpx
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 logger = logging.getLogger("ai-service.memory.long_term")
 
