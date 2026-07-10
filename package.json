@@ -1,0 +1,16 @@
+{
+  "name": "rail-yatra-platform",
+  "version": "1.0.0",
+  "description": "AI-powered Railway Travel Intelligence Platform",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter \"*\" dev",
+    "build": "pnpm --filter \"*\" build",
+    "test": "pnpm --filter \"*\" test",
+    "lint": "pnpm --filter \"*\" lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

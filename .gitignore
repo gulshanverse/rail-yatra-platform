@@ -138,6 +138,23 @@ dist
 !.yarn/versions
 
 # Vite files
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
 .vite/
+
+# Python Virtual Environments & Cache
+venv/
+.venv/
+ENV/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# SQLite Database Files
+*.db
+*.db-journal
+dev.db
+dev.db-journal
+
