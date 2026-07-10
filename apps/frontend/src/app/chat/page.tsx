@@ -483,6 +483,15 @@ export default function AIWorkspace() {
             >
               <Sliders className="h-3.5 w-3.5" /> Settings
             </button>
+            {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+              <button 
+                onClick={() => router.push('/admin')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer text-primary"
+                title="Admin Control Panel"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" /> Admin
+              </button>
+            )}
           </div>
           
           <button

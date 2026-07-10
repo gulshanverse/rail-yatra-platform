@@ -227,3 +227,64 @@ model EngagementScore {
   score         Int      @default(0)
   lastTriggered DateTime @default(now())
 }
+
+model AuditLog {
+  id               String   @id @default(uuid())
+  actorId          String
+  actorEmail       String
+  action           String   // toggle_feature_flag, update_system_config, etc.
+  requestId        String?
+  ipAddress        String?
+  userAgent        String?
+  affectedResource String?
+  actionResult     String   @default("success") // success, failed
+  details          String   // JSON string of differences
+  timestamp        DateTime @default(now())
+}
+
+model SystemMetric {
+  id            String   @id @default(uuid())
+  nodeName      String   // api_server, database, redis, ai_service, background_worker
+  status        String   // healthy, degraded, critical
+  cpuPercent    Float    @default(0.0)
+  memoryBytes   Decimal  @default(0)
+  latencyMs     Int      @default(0)
+  cacheHitRatio Float    @default(1.0)
+  queueLength   Int      @default(0)
+  timestamp     DateTime @default(now())
+}
+
+model PlatformEvent {
+  id        String   @id @default(uuid())
+  type      String   // user_login, subscription_purchase, etc.
+  details   String?  // JSON context
+  timestamp DateTime @default(now())
+}
+
+model AnalyticsSnapshot {
+  id               String   @id @default(uuid())
+  date             String   @unique // YYYY-MM-DD
+  activeUsersCount Int      @default(0)
+  aiMessagesCount  Int      @default(0)
+  analysesCount    Int      @default(0)
+  revenueAmount    Decimal  @default(0)
+  retentionRate    Float    @default(100.0)
+  conversionRatio  Float    @default(0.0)
+  timestamp        DateTime @default(now())
+}
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model SystemConfiguration {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
