@@ -22,16 +22,18 @@ class TestJourneyIntelligenceEngine(unittest.TestCase):
 
     def test_prediction_certainty_mapping(self):
         """Verify waitlist clearances and prediction confidence calculation are decoupled."""
+        loop = asyncio.new_event_loop()
         # 1. No waitlist (confirmed status) -> high probability & confidence
-        res_cnf = predict_journey_metrics("12002", "3A", waitlist_position=None)
+        res_cnf = loop.run_until_complete(predict_journey_metrics("12002", "3A", waitlist_position=None))
         self.assertEqual(res_cnf["confirmation_probability"], 100.0)
         self.assertTrue(res_cnf["confidence_score"] >= 0.9)
 
         # 2. Waitlisted ticket -> clearing probability computed by class rules
-        res_wl = predict_journey_metrics("12002", "3A", waitlist_position=12)
+        res_wl = loop.run_until_complete(predict_journey_metrics("12002", "3A", waitlist_position=12))
         # WL 12 falls inside range <= 25 (Probability should be 82.0)
         self.assertEqual(res_wl["confirmation_probability"], 82.0)
         self.assertTrue(0.0 <= res_wl["confidence_score"] <= 1.0)
+        loop.close()
 
     def test_extensible_scoring_calculations(self):
         """Verify sub-score formulas and dynamic preference weights work correctly."""

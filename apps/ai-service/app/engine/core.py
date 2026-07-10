@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any
 from app.engine.models import TravelRequirement, TravelOption, RankedRecommendation
-from app.tools.train_search import search_trains
+from app.data.manager import railway_data_manager
 from app.engine.prediction import predict_journey_metrics
 from app.engine.scoring import scoring_engine
 from app.engine.boarding import optimize_boarding_stations
@@ -25,38 +25,38 @@ class JourneyIntelligenceEngine:
         # 1. Gather raw travel choices
         raw_options: List[Dict[str, Any]] = []
 
-        # Standard direct routes
-        direct_trains = search_trains(req.source, req.destination)
+        # Standard direct routes fetched via normalized data manager
+        direct_trains = await railway_data_manager.search_trains(req.source, req.destination)
         for train in direct_trains:
             # Determine initial waitlist status
             wl_status = "Available 18"
             if req.current_wl_position:
                 wl_status = f"WL {req.current_wl_position}"
-            elif "Rajdhani" in train["name"]:
+            elif "Rajdhani" in train.train_name:
                 wl_status = "WL 14"
-            elif "Kerala" in train["name"]:
+            elif "Kerala" in train.train_name:
                 wl_status = "WL 25"
                 
             raw_options.append({
-                "train_number": train["train_number"],
-                "train_name": train["name"],
+                "train_number": train.train_number,
+                "train_name": train.train_name,
                 "source": req.source,
                 "destination": req.destination,
-                "departure": train["departure"],
-                "arrival": train["arrival"],
-                "duration": train["duration"],
+                "departure": train.departure,
+                "arrival": train.arrival,
+                "duration": train.duration,
                 "booking_class": req.preferred_class,
-                "fare": train["base_fare"].get(req.preferred_class, 1200),
+                "fare": train.base_fare.get(req.preferred_class.upper(), 1200),
                 "waitlist_status": wl_status,
                 "journey_date": req.journey_date
             })
 
         # Alternative station junctions
-        alt_boarding = optimize_boarding_stations(req.source, req.destination, req.preferred_class, req.journey_date)
+        alt_boarding = await optimize_boarding_stations(req.source, req.destination, req.preferred_class, req.journey_date)
         raw_options.extend(alt_boarding)
 
         # Alternative travel dates (±2 days)
-        alt_dates = optimize_travel_dates(req.source, req.destination, req.journey_date, req.preferred_class)
+        alt_dates = await optimize_travel_dates(req.source, req.destination, req.journey_date, req.preferred_class)
         raw_options.extend(alt_dates)
 
         # 2. Enrich, Score, and Compile details for each option
@@ -81,7 +81,7 @@ class JourneyIntelligenceEngine:
                     wl_pos = 15
             
             # Predict delay & confirmation clearance
-            pred = predict_journey_metrics(
+            pred = await predict_journey_metrics(
                 opt["train_number"],
                 opt["booking_class"],
                 wl_pos

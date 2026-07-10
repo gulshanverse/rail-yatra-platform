@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # DB and Cache Settings
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
     QDRANT_URL: str = Field(default="http://localhost:6333")
+    SYNC_INTERVAL_SECS: int = Field(default=600, description="Background synchronization interval in seconds")
 
     # LLM Settings
     DEFAULT_PROVIDER: str = Field(default="openai")  # openai, anthropic, gemini, openrouter, local
