@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../store/authStore';
+import FloatingAI from '../components/FloatingAI';
 import { 
   Train, 
   Sparkles, 
@@ -212,6 +213,13 @@ export default function Home() {
               <p className="text-muted-foreground text-base max-w-xl">
                 Avoid waitlist uncertainties, discover split-journey tickets, optimize departure boarding junctions, and predict delays using specialized agent logic.
               </p>
+              <button 
+                onClick={() => router.push('/chat')}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-all shadow-premium cursor-pointer"
+              >
+                <Sparkles className="h-4.5 w-4.5" />
+                Open AI Workspace
+              </button>
             </div>
           </div>
 
@@ -457,6 +465,9 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Floating AI assistant bubble */}
+      <FloatingAI />
 
       {/* Footer */}
       <footer className="mt-auto border-t border-border py-6 text-center text-xs text-muted-foreground bg-muted/20">

@@ -140,3 +140,151 @@ model Payment {
   status    String   // completed, failed, pending
   createdAt DateTime @default(now())
 }
+
+model Invoice {
+  id            String   @id @default(uuid())
+  paymentId     String?
+  userId        String
+  invoiceNumber String   @unique
+  pdfUrl        String?
+  amount        Decimal
+  currency      String   @default("INR")
+  status        String   @default("paid") // paid, void, refunded
+  createdAt     DateTime @default(now())
+}
+
+model UsageLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // ai_message, journey_analysis, pnr_check, recommendation_request
+  timestamp DateTime @default(now())
+}
+
+model BillingEvent {
+  id          String   @id @default(uuid())
+  userId      String
+  eventType   String   // payment_success, payment_failed, subscription_renewed, subscription_cancelled
+  payload     String   // JSON string of event body
+  timestamp   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  category  String   @default("System") // Journey, PNR, AI, Billing, Marketing, System
+  priority  String   @default("medium") // low, medium, high, critical
+  read      Boolean  @default(false)
+  channel   String   // email, sms, push, whatsapp
+  timestamp DateTime @default(now())
+}
+
+model NotificationPreference {
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  emailAlerts    Boolean @default(true)
+  smsAlerts      Boolean @default(false)
+  pushAlerts     Boolean @default(true)
+  whatsappAlerts Boolean @default(false)
+  quietHoursStart String @default("22:00") // HH:MM format
+  quietHoursEnd   String @default("06:00")
+  marketingAlerts Boolean @default(false)
+  digestPreference String @default("instant") // instant, daily_digest, weekly_digest
+}
+
+model ReminderSchedule {
+  id           String   @id @default(uuid())
+  userId       String
+  title        String
+  description  String
+  triggerTime  DateTime
+  status       String   @default("pending") // pending, sent, failed
+  reminderType String   // journey_preparation, booking_window, subscription_expiry
+  metadata     String?  // JSON string parameters
+}
+
+model UserInsight {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  content   String   // AI-generated personalization travel recommendation summary
+  timestamp DateTime @default(now())
+}
+
+model DeliveryLog {
+  id        String   @id @default(uuid())
+  userId    String
+  channel   String
+  status    String   // success, failed
+  errorMsg  String?
+  timestamp DateTime @default(now())
+}
+
+model EngagementScore {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  score         Int      @default(0)
+  lastTriggered DateTime @default(now())
+}
+
+model AuditLog {
+  id               String   @id @default(uuid())
+  actorId          String
+  actorEmail       String
+  action           String   // toggle_feature_flag, update_system_config, etc.
+  requestId        String?
+  ipAddress        String?
+  userAgent        String?
+  affectedResource String?
+  actionResult     String   @default("success") // success, failed
+  details          String   // JSON string of differences
+  timestamp        DateTime @default(now())
+}
+
+model SystemMetric {
+  id            String   @id @default(uuid())
+  nodeName      String   // api_server, database, redis, ai_service, background_worker
+  status        String   // healthy, degraded, critical
+  cpuPercent    Float    @default(0.0)
+  memoryBytes   Decimal  @default(0)
+  latencyMs     Int      @default(0)
+  cacheHitRatio Float    @default(1.0)
+  queueLength   Int      @default(0)
+  timestamp     DateTime @default(now())
+}
+
+model PlatformEvent {
+  id        String   @id @default(uuid())
+  type      String   // user_login, subscription_purchase, etc.
+  details   String?  // JSON context
+  timestamp DateTime @default(now())
+}
+
+model AnalyticsSnapshot {
+  id               String   @id @default(uuid())
+  date             String   @unique // YYYY-MM-DD
+  activeUsersCount Int      @default(0)
+  aiMessagesCount  Int      @default(0)
+  analysesCount    Int      @default(0)
+  revenueAmount    Decimal  @default(0)
+  retentionRate    Float    @default(100.0)
+  conversionRatio  Float    @default(0.0)
+  timestamp        DateTime @default(now())
+}
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model SystemConfiguration {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
