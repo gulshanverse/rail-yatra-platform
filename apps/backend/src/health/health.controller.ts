@@ -35,6 +35,42 @@ function checkTcpConnection(
   });
 }
 
+/**
+ * Resolves Redis host and port from environment variables.
+ * Prioritises REDIS_URL (as provided by Railway and most managed Redis providers).
+ * Falls back to REDIS_HOST / REDIS_PORT only when REDIS_URL is absent.
+ */
+function resolveRedisHostPort(): { host: string; port: number } {
+  const redisUrl = process.env.REDIS_URL;
+
+  if (redisUrl) {
+    try {
+      const parsed = new URL(redisUrl);
+      return {
+        host: parsed.hostname,
+        port: parsed.port ? parseInt(parsed.port, 10) : 6379,
+      };
+    } catch {
+      // URL constructor can fail on some redis:// URIs – fall back to regex
+      const match = redisUrl.match(
+        /redis:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
+      );
+      if (match) {
+        return {
+          host: match[1],
+          port: match[2] ? parseInt(match[2], 10) : 6379,
+        };
+      }
+    }
+  }
+
+  // Fallback: individual host/port env vars (local development)
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  };
+}
+
 @Controller('api/health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,9 +85,9 @@ export class HealthController {
   @Get('ready')
   async getReady(@Res() res: Response) {
     let dbHealthy = false;
-    let aiHealthy = false;
     let redisHealthy = false;
 
+    // --- Required: PostgreSQL ---
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       dbHealthy = true;
@@ -59,27 +95,46 @@ export class HealthController {
       dbHealthy = false;
     }
 
-    try {
-      const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      const response = await fetch(`${aiUrl}/health`, { method: 'GET' });
-      aiHealthy = response.ok;
-    } catch {
-      aiHealthy = false;
-    }
-
-    const redisHost = process.env.REDIS_HOST || 'localhost';
-    const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
+    // --- Required: Redis ---
+    const { host: redisHost, port: redisPort } = resolveRedisHostPort();
     redisHealthy = await checkTcpConnection(redisHost, redisPort);
 
-    if (dbHealthy && aiHealthy && redisHealthy) {
-      return res.status(HttpStatus.OK).json({ status: 'ready' });
+    // --- Optional: AI Service (informational, not a gate) ---
+    const aiServiceUrl = process.env.AI_SERVICE_URL;
+    let aiStatus: string;
+
+    if (!aiServiceUrl) {
+      aiStatus = 'not_configured';
+    } else {
+      try {
+        const response = await fetch(`${aiServiceUrl}/health`, {
+          method: 'GET',
+        });
+        aiStatus = response.ok ? 'healthy' : 'failed';
+      } catch {
+        aiStatus = 'failed';
+      }
+    }
+
+    // Readiness gates on required infrastructure only
+    const isReady = dbHealthy && redisHealthy;
+
+    if (isReady) {
+      return res.status(HttpStatus.OK).json({
+        status: 'ready',
+        components: {
+          database: 'healthy',
+          redis: 'healthy',
+          ai_service: aiStatus,
+        },
+      });
     } else {
       return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
         status: 'unready',
         components: {
           database: dbHealthy ? 'healthy' : 'failed',
-          ai_service: aiHealthy ? 'healthy' : 'failed',
           redis: redisHealthy ? 'healthy' : 'failed',
+          ai_service: aiStatus,
         },
       });
     }
@@ -87,6 +142,7 @@ export class HealthController {
 
   @Get()
   async getHealth(@Res() res: Response) {
+    // --- Database ---
     let dbStatus = 'healthy';
     let dbLatency = 0;
     const startDb = Date.now();
@@ -97,38 +153,60 @@ export class HealthController {
       dbStatus = 'unreachable';
     }
 
-    let aiStatus = 'healthy';
+    // --- AI Service (optional) ---
+    let aiStatus: string;
     let aiLatency = 0;
-    const startAi = Date.now();
-    const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-    try {
-      const response = await fetch(`${aiUrl}/health`, { method: 'GET' });
-      if (response.ok) {
-        aiLatency = Date.now() - startAi;
-      } else {
-        aiStatus = 'degraded';
+    const aiServiceUrl = process.env.AI_SERVICE_URL;
+
+    if (!aiServiceUrl) {
+      aiStatus = 'not_configured';
+    } else {
+      const startAi = Date.now();
+      try {
+        const response = await fetch(`${aiServiceUrl}/health`, {
+          method: 'GET',
+        });
+        if (response.ok) {
+          aiLatency = Date.now() - startAi;
+          aiStatus = 'healthy';
+        } else {
+          aiStatus = 'degraded';
+        }
+      } catch {
+        aiStatus = 'unreachable';
       }
-    } catch {
-      aiStatus = 'unreachable';
     }
 
-    const redisHost = process.env.REDIS_HOST || 'localhost';
-    const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
+    // --- Redis ---
+    const { host: redisHost, port: redisPort } = resolveRedisHostPort();
     const startRedis = Date.now();
     const isRedisUp = await checkTcpConnection(redisHost, redisPort);
     const redisLatency = Date.now() - startRedis;
 
-    const qdrantHost = process.env.QDRANT_HOST || 'localhost';
-    const qdrantPort = parseInt(process.env.QDRANT_PORT || '6333', 10);
-    const startQdrant = Date.now();
-    const isQdrantUp = await checkTcpConnection(qdrantHost, qdrantPort);
-    const qdrantLatency = Date.now() - startQdrant;
+    // --- Qdrant (optional) ---
+    let qdrantStatus: string;
+    let qdrantLatency = 0;
+    const qdrantHost = process.env.QDRANT_HOST;
+    const qdrantUrl = process.env.QDRANT_URL;
 
-    const isAllHealthy =
-      dbStatus === 'healthy' &&
-      aiStatus === 'healthy' &&
-      isRedisUp &&
-      isQdrantUp;
+    if (!qdrantHost && !qdrantUrl) {
+      qdrantStatus = 'not_configured';
+    } else {
+      const resolvedHost = qdrantHost || 'localhost';
+      const qdrantPort = parseInt(process.env.QDRANT_PORT || '6333', 10);
+      const startQdrant = Date.now();
+      const isQdrantUp = await checkTcpConnection(resolvedHost, qdrantPort);
+      qdrantLatency = Date.now() - startQdrant;
+      qdrantStatus = isQdrantUp ? 'healthy' : 'unreachable';
+    }
+
+    // Overall health considers only services that are actually configured.
+    // Required: database + redis.  Optional: ai_service, qdrant.
+    const requiredHealthy = dbStatus === 'healthy' && isRedisUp;
+    const aiHealthy = aiStatus === 'not_configured' || aiStatus === 'healthy';
+    const qdrantHealthy =
+      qdrantStatus === 'not_configured' || qdrantStatus === 'healthy';
+    const isAllHealthy = requiredHealthy && aiHealthy && qdrantHealthy;
 
     return res.status(HttpStatus.OK).json({
       status: isAllHealthy ? 'healthy' : 'degraded',
@@ -141,7 +219,7 @@ export class HealthController {
           latencyMs: redisLatency,
         },
         qdrant: {
-          status: isQdrantUp ? 'healthy' : 'unreachable',
+          status: qdrantStatus,
           latencyMs: qdrantLatency,
         },
         notification_scheduler: { status: 'healthy', activeJobs: 2 },
