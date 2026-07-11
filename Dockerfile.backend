@@ -44,7 +44,7 @@ RUN pnpm --filter backend run build
 # Extract the backend package and its production dependencies using pnpm deploy.
 # This produces a fully functional, self-contained bundle at /app/deployed
 # containing only production dependencies (flat node_modules).
-RUN pnpm --filter backend deploy --prod /app/deployed
+RUN pnpm --filter backend deploy --prod --legacy /app/deployed
 
 # ============================================================
 # Stage 3: Production Runtime
