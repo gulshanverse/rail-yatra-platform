@@ -1,0 +1,58 @@
+# ── Build context exclusions for backend Docker image ──
+# Monorepo: only apps/backend + root workspace files are needed
+
+# Dependencies (reinstalled inside container)
+node_modules
+**/node_modules
+
+# Version control
+.git
+.github
+
+# Build outputs (rebuilt inside container)
+**/dist
+**/.next
+**/.output
+**/coverage
+
+# Workspaces not needed for backend build
+apps/frontend
+apps/ai-service
+
+# Python artifacts
+**/__pycache__
+**/venv
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+
+# Documentation and scripts
+docs
+scripts
+
+# Environment files (injected at runtime, never baked into image)
+.env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+*.log
+**/*.log
+
+# SQLite dev databases
+*.db
+*.db-journal
+
+# IDE and editor files
+.vscode
+.idea
+**/.vscode
+**/.idea
+
+# Misc
+.pnpm-store
+LICENSE
+README.md
+**/README.md
