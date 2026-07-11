@@ -27,7 +27,7 @@ COPY apps/backend/package.json ./apps/backend/package.json
 COPY apps/backend/prisma ./apps/backend/prisma
 
 # Install all dependencies (including devDependencies) so we can compile and run generators
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Generate Prisma Client inside the build workspace
 RUN pnpm --filter backend exec prisma generate
