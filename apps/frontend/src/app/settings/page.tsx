@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
+import { API_BASE_URL } from '../../lib/api';
 import { 
   Sparkles, 
   ArrowLeft, 
@@ -87,11 +88,11 @@ export default function UserSettingsCockpit() {
       const headers = { Authorization: `Bearer ${token}` };
       
       // Load notifications list
-      const notifUrl = `http://localhost:5000/api/engagement/notifications?filter=${filterTab}${categoryFilter ? `&category=${categoryFilter}` : ''}`;
+      const notifUrl = `${API_BASE_URL}/api/engagement/notifications?filter=${filterTab}${categoryFilter ? `&category=${categoryFilter}` : ''}`;
       const notifRes = await fetch(notifUrl, { headers });
-      const prefsRes = await fetch('http://localhost:5000/api/engagement/preferences', { headers });
-      const insightsRes = await fetch('http://localhost:5000/api/engagement/insights', { headers });
-      const scoreRes = await fetch('http://localhost:5000/api/engagement/score', { headers });
+      const prefsRes = await fetch(`${API_BASE_URL}/api/engagement/preferences`, { headers });
+      const insightsRes = await fetch(`${API_BASE_URL}/api/engagement/insights`, { headers });
+      const scoreRes = await fetch(`${API_BASE_URL}/api/engagement/score`, { headers });
 
       if (notifRes.ok && prefsRes.ok && insightsRes.ok && scoreRes.ok) {
         const notifData = await notifRes.json();
@@ -131,7 +132,7 @@ export default function UserSettingsCockpit() {
     setPreferences(nextPrefs);
 
     try {
-      const res = await fetch('http://localhost:5000/api/engagement/preferences', {
+      const res = await fetch(`${API_BASE_URL}/api/engagement/preferences`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +153,7 @@ export default function UserSettingsCockpit() {
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/engagement/notifications/${id}/read`, {
+      const res = await fetch(`${API_BASE_URL}/api/engagement/notifications/${id}/read`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -168,7 +169,7 @@ export default function UserSettingsCockpit() {
 
   const handleMarkAllRead = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/engagement/notifications/read-all', {
+      const res = await fetch(`${API_BASE_URL}/api/engagement/notifications/read-all`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });

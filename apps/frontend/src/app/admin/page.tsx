@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
+import { API_BASE_URL } from '../../lib/api';
 import { 
   ArrowLeft, 
   Check, 
@@ -97,10 +98,10 @@ export default function AdminOperationsHub() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       
-      const dashRes = await fetch('http://localhost:5000/api/admin/dashboard', { headers });
-      const healthRes = await fetch('http://localhost:5000/api/admin/health', { headers });
-      const configRes = await fetch('http://localhost:5000/api/admin/configs', { headers });
-      const auditRes = await fetch('http://localhost:5000/api/admin/audit-logs', { headers });
+      const dashRes = await fetch(`${API_BASE_URL}/api/admin/dashboard`, { headers });
+      const healthRes = await fetch(`${API_BASE_URL}/api/admin/health`, { headers });
+      const configRes = await fetch(`${API_BASE_URL}/api/admin/configs`, { headers });
+      const auditRes = await fetch(`${API_BASE_URL}/api/admin/audit-logs`, { headers });
 
       if (dashRes.ok && healthRes.ok && configRes.ok && auditRes.ok) {
         const dashData = await dashRes.json();
@@ -144,7 +145,7 @@ export default function AdminOperationsHub() {
 
   const handleToggleFlag = async (name: string, currentEnabled: boolean) => {
     try {
-      const res = await fetch('http://localhost:5000/api/admin/feature-flags', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/feature-flags`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,7 +159,7 @@ export default function AdminOperationsHub() {
         setActionMessage({ type: 'success', text: `Feature flag '${name}' updated successfully.` });
         
         // Refresh audit logs
-        const auditRes = await fetch('http://localhost:5000/api/admin/audit-logs', {
+        const auditRes = await fetch(`${API_BASE_URL}/api/admin/audit-logs`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (auditRes.ok) setAuditLogs(await auditRes.json());
@@ -170,7 +171,7 @@ export default function AdminOperationsHub() {
 
   const handleSaveBanner = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/admin/configs', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/configs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -183,7 +184,7 @@ export default function AdminOperationsHub() {
         setActionMessage({ type: 'success', text: 'System announcement banner config updated.' });
         
         // Refresh audit logs
-        const auditRes = await fetch('http://localhost:5000/api/admin/audit-logs', {
+        const auditRes = await fetch(`${API_BASE_URL}/api/admin/audit-logs`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (auditRes.ok) setAuditLogs(await auditRes.json());

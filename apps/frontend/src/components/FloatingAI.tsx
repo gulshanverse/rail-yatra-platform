@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Send, Bot, User as UserIcon, Train, Calendar, TrendingUp } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { API_BASE_URL } from '../lib/api';
 
 export default function FloatingAI() {
   const { token, user } = useAuthStore();
@@ -26,7 +27,7 @@ export default function FloatingAI() {
     if (!activeConversationId) {
       try {
         // Auto-create a chat session on open
-        const res = await fetch('http://localhost:5000/api/conversations', {
+        const res = await fetch(`${API_BASE_URL}/api/conversations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -54,7 +55,7 @@ export default function FloatingAI() {
     setLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/conversations/${activeConversationId}/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${activeConversationId}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

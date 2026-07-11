@@ -63,11 +63,43 @@ app.include_router(intelligence_router)
 
 @app.on_event("startup")
 async def startup_event():
+    # 1. Pre-flight Redis connection validation
+    redis_healthy = False
+    if short_term_memory.redis_client:
+        try:
+            short_term_memory.redis_client.ping()
+            redis_healthy = True
+        except Exception as e:
+            logger.error(f"[FATAL CONNECTION ERROR] Redis ping failed during startup: {e}")
+    
+    if not redis_healthy:
+        logger.critical("[FATAL CONFIGURATION ERROR] Redis connection is required. Process aborting.")
+        import sys
+        sys.exit(1)
+
+    # 2. Pre-flight Qdrant connection validation (fail-fast in production mode)
+    if os.getenv("ENV") == "production" and not qdrant_rag.enabled:
+        logger.critical("[FATAL CONNECTION ERROR] Qdrant Cloud connection failed during startup. Process aborting.")
+        import sys
+        sys.exit(1)
+
     logger.info("Initializing vector search collections in Qdrant...")
     qdrant_rag.initialize_collections()
     logger.info("Starting background synchronization loops...")
     await railway_background_syncer.start()
     logger.info("AI Core Platform started successfully.")
+
+@app.on_event("shutdown")
+def shutdown_event():
+    logger.info("Shutting down background synchronization loops...")
+    railway_background_syncer.stop()
+    if short_term_memory.redis_client:
+        try:
+            short_term_memory.redis_client.close()
+            logger.info("Redis client connection closed gracefully.")
+        except Exception as e:
+            logger.error(f"Error closing Redis client connection: {e}")
+    logger.info("AI Service gracefully shut down.")
 
 @app.get("/health")
 def health_check():

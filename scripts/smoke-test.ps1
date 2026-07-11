@@ -1,8 +1,11 @@
 # RailYatra Minimum Production Smoke Test Suite
 # Exit Code 0 = PASS, 1 = FAIL
 
-$BaseUrl = "http://localhost:5000"
-$AiUrl = "http://localhost:8000"
+param (
+    [string]$BaseUrl = "http://localhost:5000",
+    [string]$AiUrl = "http://localhost:8000"
+)
+
 $FailCount = 0
 
 Write-Output "====================================================================="
@@ -143,10 +146,46 @@ if ($accessToken -eq "") {
         } catch {
             Assert-Test "Delete Conversation Endpoint" $false $_.Exception.Message
         }
+
+        # 7.1 Notifications Retrieval Check
+        try {
+            $notifResponse = Invoke-RestMethod -Uri "$BaseUrl/api/engagement/notifications" -Method GET -Headers $headers
+            Assert-Test "Notifications Retrieval Endpoint" ($notifResponse -ne $null) "Response is null"
+        } catch {
+            Assert-Test "Notifications Retrieval Endpoint" $false $_.Exception.Message
+        }
     }
 }
 
-# 8. Journey Intelligence core engine test (FastAPI direct mock call)
+# 8. JWT Refresh Failure Rejection Check
+try {
+    $refreshResponse = Invoke-RestMethod -Uri "$BaseUrl/auth/refresh" -Method POST
+    Assert-Test "JWT Refresh Failure Rejection" $false "Expected unauthorized, but got success"
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Assert-Test "JWT Refresh Failure Rejection" ($statusCode -eq 401 -or $statusCode -eq 400) "Status: $statusCode"
+}
+
+# 9. Invalid JWT Rejection Check
+try {
+    $badHeaders = @{ "Authorization" = "Bearer invalid_token_here" }
+    $badMe = Invoke-RestMethod -Uri "$BaseUrl/auth/me" -Method GET -Headers $badHeaders
+    Assert-Test "Invalid JWT Rejection" $false "Expected unauthorized, but got success"
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Assert-Test "Invalid JWT Rejection" ($statusCode -eq 401) "Status: $statusCode"
+}
+
+# 10. Unauthorized Endpoints Rejection Check
+try {
+    $anonMe = Invoke-RestMethod -Uri "$BaseUrl/auth/me" -Method GET
+    Assert-Test "Unauthorized Endpoint Rejection" $false "Expected unauthorized, but got success"
+} catch {
+    $statusCode = $_.Exception.Response.StatusCode.value__
+    Assert-Test "Unauthorized Endpoint Rejection" ($statusCode -eq 401) "Status: $statusCode"
+}
+
+# 11. Journey Intelligence core engine test (FastAPI direct mock call)
 try {
     $intelBody = @{
         source = "NDLS"
@@ -160,7 +199,15 @@ try {
     Assert-Test "FastAPI Journey Intelligence Endpoint" $false $_.Exception.Message
 }
 
-# 9. Clean up test user directly in database if possible or log completion
+# 12. User Logout Endpoint Check
+try {
+    $logoutResponse = Invoke-RestMethod -Uri "$BaseUrl/auth/logout" -Method POST
+    Assert-Test "User Logout Endpoint" ($logoutResponse.success -eq $true) "Logout failed"
+} catch {
+    Assert-Test "User Logout Endpoint" $false $_.Exception.Message
+}
+
+# Clean up test user directly in database if possible or log completion
 Write-Output "Smoke test cleanup: temporary user $TestEmail successfully created."
 
 Write-Output "====================================================================="

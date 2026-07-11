@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
+import { API_BASE_URL } from '../../lib/api';
 import { 
   Sparkles, 
   Send, 
@@ -112,7 +113,7 @@ export default function AIWorkspace() {
 
   const loadConversations = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/conversations', {
+      const res = await fetch(`${API_BASE_URL}/api/conversations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -131,7 +132,7 @@ export default function AIWorkspace() {
     setOptions([]);
     setActiveOptionIndex(null);
     try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -150,7 +151,7 @@ export default function AIWorkspace() {
     setStreaming(true);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/conversations/${convId}/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${convId}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -216,7 +217,7 @@ export default function AIWorkspace() {
     setOptions([]);
     setActiveOptionIndex(null);
     try {
-      const res = await fetch('http://localhost:5000/api/conversations', {
+      const res = await fetch(`${API_BASE_URL}/api/conversations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +259,7 @@ export default function AIWorkspace() {
   const handleRename = async (id: string) => {
     if (!editTitle.trim()) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -279,7 +280,7 @@ export default function AIWorkspace() {
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this chat session?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
+import { API_BASE_URL } from '../../lib/api';
 import { 
   Sparkles, 
   ArrowLeft, 
@@ -60,8 +61,8 @@ export default function SubscriptionHub() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       
-      const subRes = await fetch('http://localhost:5000/api/monetization/subscription', { headers });
-      const invoiceRes = await fetch('http://localhost:5000/api/monetization/invoices', { headers });
+      const subRes = await fetch(`${API_BASE_URL}/api/monetization/subscription`, { headers });
+      const invoiceRes = await fetch(`${API_BASE_URL}/api/monetization/invoices`, { headers });
 
       if (subRes.ok && invoiceRes.ok) {
         const subData = await subRes.json();
@@ -92,7 +93,7 @@ export default function SubscriptionHub() {
     setMessage(null);
     try {
       // 1. Request Order creation from checkout API
-      const res = await fetch('http://localhost:5000/api/monetization/checkout', {
+      const res = await fetch(`${API_BASE_URL}/api/monetization/checkout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +110,7 @@ export default function SubscriptionHub() {
 
       // 2. Simulate payment processing and webhook trigger
       // In development sandbox, we trigger the webhook directly to auto-complete the payment
-      const webhookRes = await fetch(`http://localhost:5000/api/monetization/webhooks/stripe`, {
+      const webhookRes = await fetch(`${API_BASE_URL}/api/monetization/webhooks/stripe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
