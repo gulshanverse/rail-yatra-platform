@@ -120,9 +120,9 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const port = process.env.PORT ?? 5000;
-  const server = (await app.listen(port)) as Server;
-  logger.log(`[Backend Service] core api running on: http://localhost:${port}`);
+  const port = Number(process.env.PORT ?? 5000);
+  const server = (await app.listen(port, '0.0.0.0')) as Server;
+  logger.log(`Backend Service running on port ${port}`);
 
   // 4. Handle Graceful Shutdown Signal Interrupts
   const gracefulShutdown = (signal: string) => {
