@@ -45,7 +45,6 @@ RUN pnpm --filter backend run build
 # This produces a fully functional, self-contained bundle at /app/deployed
 # containing only production dependencies (flat node_modules).
 RUN pnpm --filter backend deploy --prod --legacy /app/deployed
-RUN echo "===== PRISMA LOCATIONS =====" && find /app -type d -name ".prisma" && echo "===== NODE_MODULES =====" && find /app/deployed -maxdepth 3 -type d
 
 # ============================================================
 # Stage 3: Production Runtime
@@ -67,7 +66,6 @@ COPY --from=builder /app/apps/backend/dist ./dist
 
 # Copy the generated Prisma Client directory from the builder workspace's root node_modules
 # to the local production node_modules so @prisma/client can find it.
-COPY --from=builder /app/deployed/node_modules/.prisma ./node_modules/.prisma
 
 # Copy Prisma schema and migrations to support runtime database migration execution
 COPY apps/backend/prisma ./prisma
