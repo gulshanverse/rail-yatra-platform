@@ -3,10 +3,10 @@
 # ============================================================
 FROM node:20-alpine AS base
 
-# Install openssl and other potential native library requirements for Prisma / Node.js
+# Install openssl and libc6-compat (required for Prisma engines on Alpine)
 RUN apk add --no-cache openssl libc6-compat
 
-# Enable Corepack and configure the correct pnpm version
+# Enable Corepack and set up pnpm
 RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
 
 ENV PNPM_HOME="/pnpm"
@@ -15,24 +15,22 @@ ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 
 # ============================================================
-# Stage 2: Workspace Builder — Install all dependencies and compile
+# Stage 2: Builder
 # ============================================================
 FROM base AS builder
 
 # Copy configuration manifests for the workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/backend/package.json ./apps/backend/package.json
-
-# Copy the prisma directory before install to support local hooks if any
 COPY apps/backend/prisma ./apps/backend/prisma
 
-# Install all dependencies (including devDependencies) so we can compile and run generators
+# Install all dependencies (including devDependencies) so we can build and generate the client
 RUN pnpm install --frozen-lockfile
 
 # Generate Prisma Client inside the build workspace
 RUN pnpm --filter backend exec prisma generate
 
-# Copy application source and build configurations
+# Copy the rest of the backend source files
 COPY apps/backend/src ./apps/backend/src
 COPY apps/backend/tsconfig.json ./apps/backend/tsconfig.json
 COPY apps/backend/tsconfig.build.json ./apps/backend/tsconfig.build.json
@@ -41,16 +39,15 @@ COPY apps/backend/nest-cli.json ./apps/backend/nest-cli.json
 # Build NestJS
 RUN pnpm --filter backend run build
 
-# Extract the backend package and its production dependencies using pnpm deploy.
-# This produces a fully functional, self-contained bundle at /app/deployed
-# containing only production dependencies (flat node_modules).
-RUN pnpm --filter backend deploy --prod --legacy /app/deployed
+# Prune devDependencies to keep only production dependencies
+RUN pnpm prune --prod
 
 # ============================================================
 # Stage 3: Production Runtime
 # ============================================================
 FROM node:20-alpine AS production
 
+# Install runtime dependencies for Prisma on Alpine
 RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
@@ -58,17 +55,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Copy the self-contained production bundle generated via pnpm deploy
-COPY --from=builder /app/deployed ./
+# Copy the pruned monorepo workspace from the builder stage
+# This preserves the exact node_modules structure and the generated Prisma Client inside the virtual store
+COPY --from=builder /app ./
 
-# Copy the pre-compiled build folder manually (since dist is typically ignored by deploy/npm pack)
-COPY --from=builder /app/apps/backend/dist ./dist
-
-# Copy the generated Prisma Client directory from the builder workspace's root node_modules
-# to the local production node_modules so @prisma/client can find it.
-
-# Copy Prisma schema and migrations to support runtime database migration execution
-COPY apps/backend/prisma ./prisma
+# Change working directory to the backend application subdirectory
+WORKDIR /app/apps/backend
 
 EXPOSE 5000
 
