@@ -42,5 +42,33 @@ class TestWorkflow(unittest.TestCase):
             
         self.loop.run_until_complete(run_test())
 
+    def test_workflow_execution_crash(self):
+        async def run_test():
+            from app.orchestrator.workflow import get_compiled_graph
+            
+            class BrokenGraph:
+                async def ainvoke(self, state, config=None):
+                    raise RuntimeError("Pregel runner crashed")
+                    
+            original_get_graph = get_compiled_graph
+            
+            import app.orchestrator.workflow
+            app.orchestrator.workflow.get_compiled_graph = lambda: BrokenGraph() # type: ignore
+            
+            try:
+                response = await workflow_executor.execute(
+                    message="Trigger crash",
+                    user_id="user-crash",
+                    conversation_id="conv-crash"
+                )
+                self.assertIsInstance(response, AIResponse)
+                self.assertEqual(response.agent, "unknown")
+                self.assertTrue("crashed" in response.errors[0])
+                self.assertTrue(len(response.response) > 0)
+            finally:
+                app.orchestrator.workflow.get_compiled_graph = original_get_graph
+                
+        self.loop.run_until_complete(run_test())
+
 if __name__ == "__main__":
     unittest.main()

@@ -100,5 +100,68 @@ class TestNodes(unittest.TestCase):
             self.assertIn("ErrorNode", state["execution_path"])
         self.loop.run_until_complete(run_test())
 
+    def test_classifier_node_error(self):
+        async def run_test():
+            from app.orchestrator.nodes import intent_classifier
+            original_classify = intent_classifier.classify
+            
+            async def broken_classify(msg):
+                raise RuntimeError("Classifier service timeout")
+            
+            intent_classifier.classify = broken_classify
+            try:
+                node = ClassifierNode()
+                state = await node(self.state)
+                self.assertEqual(state["intent"], "conversation")
+                self.assertTrue(any("Classification failed" in err for err in state["errors"]))
+            finally:
+                intent_classifier.classify = original_classify
+                
+        self.loop.run_until_complete(run_test())
+
+    def test_router_node_error(self):
+        async def run_test():
+            from app.orchestrator.nodes import router
+            original_route = router.route
+            
+            async def broken_route(intent):
+                raise RuntimeError("Routing DB offline")
+                
+            router.route = broken_route
+            try:
+                node = RouterNode()
+                self.state["intent"] = "plan_travel"
+                state = await node(self.state)
+                self.assertEqual(state["selected_agent"], "conversation") # Default fallback
+                self.assertTrue(any("Routing failed" in err for err in state["errors"]))
+            finally:
+                router.route = original_route
+                
+        self.loop.run_until_complete(run_test())
+
+    def test_agent_node_error(self):
+        async def run_test():
+            class FlakyAgent(IAgent):
+                name = "FlakyAgent"
+                system_prompt = ""
+                async def run(self, msg, ctx=None):
+                    raise RuntimeError("LLM rate limit reached")
+                async def run_stream(self, msg, ctx=None):
+                    raise NotImplementedError()
+                    
+            flaky = FlakyAgent()
+            agent_registry.register("flaky_key", flaky)
+            
+            node = AgentNode()
+            self.state["selected_agent"] = "flaky_key"
+            
+            from app.orchestrator.errors import AgentExecutionError
+            with self.assertRaises(AgentExecutionError):
+                await node(self.state)
+                
+            self.assertTrue(any("Agent execution failed" in err for err in self.state["errors"]))
+            
+        self.loop.run_until_complete(run_test())
+
 if __name__ == "__main__":
     unittest.main()
