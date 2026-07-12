@@ -23,7 +23,7 @@ class MetricsCollector:
 
     def reset(self) -> None:
         self._metrics_lock = threading.Lock()
-        with self._lock:
+        with self._metrics_lock:
             self.request_count: int = 0
             self.failure_count: int = 0
             self.agent_executions: Dict[str, int] = {}
