@@ -5,7 +5,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 
-from app.orchestrator.graph import compiled_graph
+import asyncio
+from app.orchestrator.workflow import workflow_executor
 from app.memory.short_term import short_term_memory
 from app.memory.long_term import long_term_memory
 
@@ -46,40 +47,35 @@ async def chat_stream(request: ChatStreamRequest):
     }
 
     async def event_generator():
-        # Keep track of generated tokens to save to memory
-        full_response = []
-        classified_intent = "conversation"
-        
         try:
-            # Leverage LangGraph astream_events to catch classification results and stream tokens
-            async for event in compiled_graph.astream_events(inputs, version="v2"):
-                kind = event["event"]
-                
-                # Check for classification completion node
-                if kind == "on_node_end" and event["name"] == "classify_node":
-                    output = event["data"]["output"]
-                    classified_intent = output.get("intent", "conversation")
-                    yield f"data: {json.dumps({'type': 'intent', 'value': classified_intent})}\n\n"
-                
-                # Catch LLM tokens streaming from active agent node
-                elif kind == "on_chat_model_stream":
-                    chunk = event["data"]["chunk"]
-                    token = chunk.content
-                    if token:
-                        full_response.append(token)
-                        yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
+            # 1. Execute the orchestration workflow pipeline
+            ai_response = await workflow_executor.execute(
+                message=request.message,
+                user_id=request.user_id,
+                conversation_id=request.conversation_id,
+                context=combined_context
+            )
             
-            # Save Assistant message to short term sliding window
-            assistant_reply = "".join(full_response)
-            short_term_memory.add_message(request.conversation_id, "assistant", assistant_reply)
+            # 2. Yield classified intent event
+            yield f"data: {json.dumps({'type': 'intent', 'value': ai_response.intent})}\n\n"
             
-            # If the classified intent is travel-related, fetch options to populate dashboard
+            # 3. Simulate streaming reply token-by-token (word-by-word) for UI compatibility
+            words = ai_response.response.split(" ")
+            for i, word in enumerate(words):
+                space = " " if i > 0 else ""
+                yield f"data: {json.dumps({'type': 'token', 'value': space + word})}\n\n"
+                await asyncio.sleep(0.005)  # Responsive delay simulation
+                
+            # Keep short-term memory updated with the assistant response
+            short_term_memory.add_message(request.conversation_id, "assistant", ai_response.response)
+            
+            # 4. Fetch travel choices if the query is travel/pnr related
             options_payload = []
-            if classified_intent in ["plan_travel", "recommendation", "journey_intelligence", "pnr"]:
+            if ai_response.intent in ["plan_travel", "recommendation", "journey_intelligence", "pnr"]:
                 try:
                     from app.engine.models import TravelRequirement
                     from app.engine.core import journey_intelligence_engine
-                    # Retrieve travel details from context or use synthetics
+                    
                     src = combined_context.get("source") or "NDLS"
                     dest = combined_context.get("destination") or "BPL"
                     j_date = combined_context.get("journey_date") or "2026-07-28"
@@ -96,11 +92,11 @@ async def chat_stream(request: ChatStreamRequest):
                 except Exception as ex:
                     logger.error(f"Error compiling stream options: {ex}")
 
-            # Save final status
-            yield f"data: {json.dumps({'type': 'done', 'reply': assistant_reply, 'options': options_payload})}\n\n"
+            # 5. Yield done event
+            yield f"data: {json.dumps({'type': 'done', 'reply': ai_response.response, 'options': options_payload})}\n\n"
             
         except Exception as e:
-            logger.error(f"Error in astream_events: {e}")
+            logger.error(f"Error in chat stream event generator: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': 'Internal orchestrator error.'})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
