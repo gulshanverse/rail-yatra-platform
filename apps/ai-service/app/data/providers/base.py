@@ -5,25 +5,31 @@ from app.data.models import (
     NormalizedStation,
     NormalizedSeatAvailability,
     NormalizedPnrStatus,
-    NormalizedDelayHistory
+    NormalizedDelayHistory,
 )
+
 
 class BaseRailwayProvider(ABC):
     """
     Abstract interface defining standard methods that all external
     Railway API providers (e.g. IRCTC, NTES, Synthetic sandbox) must implement.
     """
+
     @property
     @abstractmethod
     def name(self) -> str:
         pass
 
     @abstractmethod
-    async def search_trains(self, source: str, destination: str) -> List[NormalizedTrain]:
+    async def search_trains(
+        self, source: str, destination: str
+    ) -> List[NormalizedTrain]:
         pass
 
     @abstractmethod
-    async def get_station_details(self, station_code: str) -> Optional[NormalizedStation]:
+    async def get_station_details(
+        self, station_code: str
+    ) -> Optional[NormalizedStation]:
         pass
 
     @abstractmethod
@@ -33,7 +39,7 @@ class BaseRailwayProvider(ABC):
         source: str,
         destination: str,
         journey_date: str,
-        booking_class: str
+        booking_class: str,
     ) -> Optional[NormalizedSeatAvailability]:
         pass
 
@@ -42,5 +48,7 @@ class BaseRailwayProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_delay_history(self, train_number: str) -> Optional[NormalizedDelayHistory]:
+    async def get_delay_history(
+        self, train_number: str
+    ) -> Optional[NormalizedDelayHistory]:
         pass

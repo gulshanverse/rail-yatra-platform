@@ -11,6 +11,7 @@ from app.vector.qdrant import qdrant_rag
 from app.data.syncer import railway_background_syncer
 from app.memory.short_term import short_term_memory
 
+
 # JSON Formatter for production logging
 class JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -18,11 +19,12 @@ class JsonFormatter(logging.Formatter):
             "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%SZ"),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage()
+            "message": record.getMessage(),
         }
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_record)
+
 
 # Initialize logger
 logger = logging.getLogger("ai-service")
@@ -36,7 +38,10 @@ if os.getenv("ENV") == "production":
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)
 else:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
 app = FastAPI(
     title="RailGPT AI Service",
@@ -70,17 +75,25 @@ async def startup_event():
             short_term_memory.redis_client.ping()
             redis_healthy = True
         except Exception as e:
-            logger.error(f"[FATAL CONNECTION ERROR] Redis ping failed during startup: {e}")
-    
+            logger.error(
+                f"[FATAL CONNECTION ERROR] Redis ping failed during startup: {e}"
+            )
+
     if os.getenv("ENV") == "production" and not redis_healthy:
-        logger.critical("[FATAL CONFIGURATION ERROR] Redis connection is required. Process aborting.")
+        logger.critical(
+            "[FATAL CONFIGURATION ERROR] Redis connection is required. Process aborting."
+        )
         import sys
+
         sys.exit(1)
 
     # 2. Pre-flight Qdrant connection validation (fail-fast in production mode)
     if os.getenv("ENV") == "production" and not qdrant_rag.enabled:
-        logger.critical("[FATAL CONNECTION ERROR] Qdrant Cloud connection failed during startup. Process aborting.")
+        logger.critical(
+            "[FATAL CONNECTION ERROR] Qdrant Cloud connection failed during startup. Process aborting."
+        )
         import sys
+
         sys.exit(1)
 
     logger.info("Initializing vector search collections in Qdrant...")
@@ -88,6 +101,7 @@ async def startup_event():
     logger.info("Starting background synchronization loops...")
     await railway_background_syncer.start()
     logger.info("AI Core Platform started successfully.")
+
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -101,11 +115,12 @@ def shutdown_event():
             logger.error(f"Error closing Redis client connection: {e}")
     logger.info("AI Service gracefully shut down.")
 
+
 @app.get("/health")
 def health_check():
     logger.info("Health check endpoint hit")
     qdrant_status = "healthy" if qdrant_rag.enabled else "offline"
-    
+
     redis_status = "healthy"
     if short_term_memory.redis_client:
         try:
@@ -120,11 +135,9 @@ def health_check():
         "status": "healthy" if is_all_healthy else "degraded",
         "service": "ai-service",
         "version": "1.0.0",
-        "dependencies": {
-            "qdrant": qdrant_status,
-            "redis": redis_status
-        }
+        "dependencies": {"qdrant": qdrant_status, "redis": redis_status},
     }
+
 
 @app.get("/health/ready")
 def readiness_check(response: Response):
@@ -135,7 +148,7 @@ def readiness_check(response: Response):
             redis_up = True
         except Exception:
             redis_up = False
-            
+
     qdrant_up = qdrant_rag.enabled or False
 
     if redis_up and qdrant_up:
@@ -146,11 +159,10 @@ def readiness_check(response: Response):
             "status": "unready",
             "dependencies": {
                 "redis": "healthy" if redis_up else "failed",
-                "qdrant": "healthy" if qdrant_up else "failed"
-            }
+                "qdrant": "healthy" if qdrant_up else "failed",
+            },
         }
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-

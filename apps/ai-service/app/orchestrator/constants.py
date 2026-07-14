@@ -3,7 +3,7 @@
 # Intent Names
 INTENT_TRAVEL_PLANNING = "plan_travel"
 INTENT_PREDICTION = "journey_intelligence"  # Maps classifier output
-INTENT_PNR = "check_pnr"                    # Maps classifier output
+INTENT_PNR = "check_pnr"  # Maps classifier output
 INTENT_KNOWLEDGE = "knowledge"
 INTENT_CONVERSATION = "conversation"
 INTENT_RECOMMENDATION = "recommendation"

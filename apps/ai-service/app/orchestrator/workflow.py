@@ -12,24 +12,26 @@ from app.orchestrator.constants import ERR_GRAPH_EXECUTION
 
 logger = logging.getLogger("ai-service.orchestrator.workflow")
 
+
 class Workflow(IWorkflow):
     """
     Core entrypoint for executing the AI platform graph orchestration layer.
     Completely decoupled from HTTP/FastAPI transport layers.
     """
+
     async def execute(
         self,
         message: str,
         user_id: str,
         conversation_id: str,
         context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None
+        trace_id: Optional[str] = None,
     ) -> AIResponse:
         request_id = f"req-{uuid.uuid4().hex[:12]}"
         trace_id = trace_id or f"tr-{uuid.uuid4().hex[:12]}"
-        
+
         metrics_collector.increment_request()
-        
+
         # 1. Initialize typed state
         state: AIState = {
             "request_id": request_id,
@@ -48,36 +50,41 @@ class Workflow(IWorkflow):
             "response": "",
             "latency_ms": 0.0,
             "errors": [],
-            "timestamps": {
-                "workflow_start_time": time.time()
-            }
+            "timestamps": {"workflow_start_time": time.time()},
         }
-        
-        logger.info(f"[{trace_id}] Workflow execution started: user='{user_id}', conversation='{conversation_id}'")
-        
+
+        logger.info(
+            f"[{trace_id}] Workflow execution started: user='{user_id}', conversation='{conversation_id}'"
+        )
+
         status = "SUCCESS"
         try:
             # 2. Get and invoke the compiled LangGraph
             graph = get_compiled_graph()
             final_state = await graph.ainvoke(state)
-            
+
             # Map outputs
             response_text = final_state.get("response", "")
             agent_key = final_state.get("selected_agent", "unknown")
             intent = final_state.get("intent", "conversation")
-            confidence = final_state.get("context", {}).get("classifier_confidence", 1.0)
+            confidence = final_state.get("context", {}).get(
+                "classifier_confidence", 1.0
+            )
             errors_list = final_state.get("errors", [])
             latency = final_state.get("latency_ms", 0.0)
             metadata = final_state.get("metadata", {})
-            
+
             if errors_list:
                 status = "DEGRADED"
-                
+
         except Exception as e:
             status = "FAILED"
             metrics_collector.increment_failure()
-            logger.error(f"[{trace_id}] Unhandled crash during graph invocation: {e}", exc_info=True)
-            
+            logger.error(
+                f"[{trace_id}] Unhandled crash during graph invocation: {e}",
+                exc_info=True,
+            )
+
             # Formulate emergency fallback details
             response_text = (
                 "I apologize, but I encountered a technical issue while processing your request. "
@@ -91,32 +98,34 @@ class Workflow(IWorkflow):
             metadata = {
                 "trace_id": trace_id,
                 "request_id": request_id,
-                "error_code": ERR_GRAPH_EXECUTION
+                "error_code": ERR_GRAPH_EXECUTION,
             }
-            
+
         # 3. Structured JSON Logging for production log aggregation
         log_payload = {
-          "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-          "level": "INFO" if status != "FAILED" else "ERROR",
-          "logger": "ai-service.orchestrator.workflow",
-          "message": "Graph execution log",
-          "request_id": request_id,
-          "trace_id": trace_id,
-          "conversation_id": conversation_id,
-          "user_id": user_id,
-          "intent": intent,
-          "selected_agent": agent_key,
-          "execution_path": state.get("execution_path", []),
-          "current_node": state.get("current_node"),
-          "execution_time_ms": round(latency, 2),
-          "node_timings_ms": {k: round(v, 2) for k, v in state.get("timestamps", {}).items()},
-          "status": status,
-          "errors": errors_list
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "level": "INFO" if status != "FAILED" else "ERROR",
+            "logger": "ai-service.orchestrator.workflow",
+            "message": "Graph execution log",
+            "request_id": request_id,
+            "trace_id": trace_id,
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "intent": intent,
+            "selected_agent": agent_key,
+            "execution_path": state.get("execution_path", []),
+            "current_node": state.get("current_node"),
+            "execution_time_ms": round(latency, 2),
+            "node_timings_ms": {
+                k: round(v, 2) for k, v in state.get("timestamps", {}).items()
+            },
+            "status": status,
+            "errors": errors_list,
         }
-        
+
         # Write structured log message
         print(json.dumps(log_payload))
-        
+
         # 4. Map final output to typed AIResponse model
         return AIResponse(
             response=response_text,
@@ -126,8 +135,9 @@ class Workflow(IWorkflow):
             citations=[],  # Citation structure is placeholder in M1
             latency_ms=latency,
             metadata=metadata,
-            errors=errors_list
+            errors=errors_list,
         )
+
 
 # Export default singleton workflow execution instance
 workflow_executor = Workflow()

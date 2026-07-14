@@ -10,22 +10,28 @@ from app.orchestrator.nodes import (
     AgentNode,
     MemoryNode,
     ResponseNode,
-    ErrorNode
+    ErrorNode,
 )
+
 
 class MockAgent(IAgent):
     name = "MockAgent"
     system_prompt = "Mock system prompt"
+
     async def run(self, user_message: str, context: Dict[str, Any] = None) -> str:
         return f"Response for: {user_message}"
-    async def run_stream(self, user_message: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+
+    async def run_stream(
+        self, user_message: str, context: Dict[str, Any] = None
+    ) -> AsyncIterator[str]:
         raise NotImplementedError()
+
 
 class TestNodes(unittest.TestCase):
     def setUp(self):
         self.mock_agent = MockAgent()
         agent_registry.register("mock_agent_key", self.mock_agent)
-        
+
         self.state: AIState = {
             "request_id": "req-t",
             "trace_id": "tr-t",
@@ -43,7 +49,7 @@ class TestNodes(unittest.TestCase):
             "response": "",
             "latency_ms": 0.0,
             "errors": [],
-            "timestamps": {"workflow_start_time": 0.0}
+            "timestamps": {"workflow_start_time": 0.0},
         }
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -57,6 +63,7 @@ class TestNodes(unittest.TestCase):
             state = await node(self.state)
             self.assertIsNotNone(state["intent"])
             self.assertIn("ClassifierNode", state["execution_path"])
+
         self.loop.run_until_complete(run_test())
 
     def test_router_node(self):
@@ -66,6 +73,7 @@ class TestNodes(unittest.TestCase):
             state = await node(self.state)
             self.assertEqual(state["selected_agent"], "travel_decision")
             self.assertIn("RouterNode", state["execution_path"])
+
         self.loop.run_until_complete(run_test())
 
     def test_agent_node(self):
@@ -75,6 +83,7 @@ class TestNodes(unittest.TestCase):
             state = await node(self.state)
             self.assertEqual(state["response"], "Response for: Verify this request")
             self.assertIn("AgentNode", state["execution_path"])
+
         self.loop.run_until_complete(run_test())
 
     def test_memory_node(self):
@@ -82,6 +91,7 @@ class TestNodes(unittest.TestCase):
             node = MemoryNode()
             state = await node(self.state)
             self.assertIn("MemoryNode", state["execution_path"])
+
         self.loop.run_until_complete(run_test())
 
     def test_response_node(self):
@@ -90,6 +100,7 @@ class TestNodes(unittest.TestCase):
             state = await node(self.state)
             self.assertIn("ResponseNode", state["execution_path"])
             self.assertIn("trace_id", state["metadata"])
+
         self.loop.run_until_complete(run_test())
 
     def test_error_node(self):
@@ -98,45 +109,52 @@ class TestNodes(unittest.TestCase):
             state = await node(self.state)
             self.assertTrue(len(state["response"]) > 0)
             self.assertIn("ErrorNode", state["execution_path"])
+
         self.loop.run_until_complete(run_test())
 
     def test_classifier_node_error(self):
         async def run_test():
             from app.orchestrator.nodes import intent_classifier
+
             original_classify = intent_classifier.classify
-            
+
             async def broken_classify(msg):
                 raise RuntimeError("Classifier service timeout")
-            
+
             intent_classifier.classify = broken_classify
             try:
                 node = ClassifierNode()
                 state = await node(self.state)
                 self.assertEqual(state["intent"], "conversation")
-                self.assertTrue(any("Classification failed" in err for err in state["errors"]))
+                self.assertTrue(
+                    any("Classification failed" in err for err in state["errors"])
+                )
             finally:
                 intent_classifier.classify = original_classify
-                
+
         self.loop.run_until_complete(run_test())
 
     def test_router_node_error(self):
         async def run_test():
             from app.orchestrator.nodes import router
+
             original_route = router.route
-            
+
             async def broken_route(intent):
                 raise RuntimeError("Routing DB offline")
-                
+
             router.route = broken_route
             try:
                 node = RouterNode()
                 self.state["intent"] = "plan_travel"
                 state = await node(self.state)
-                self.assertEqual(state["selected_agent"], "conversation") # Default fallback
+                self.assertEqual(
+                    state["selected_agent"], "conversation"
+                )  # Default fallback
                 self.assertTrue(any("Routing failed" in err for err in state["errors"]))
             finally:
                 router.route = original_route
-                
+
         self.loop.run_until_complete(run_test())
 
     def test_agent_node_error(self):
@@ -144,24 +162,30 @@ class TestNodes(unittest.TestCase):
             class FlakyAgent(IAgent):
                 name = "FlakyAgent"
                 system_prompt = ""
+
                 async def run(self, msg, ctx=None):
                     raise RuntimeError("LLM rate limit reached")
+
                 async def run_stream(self, msg, ctx=None):
                     raise NotImplementedError()
-                    
+
             flaky = FlakyAgent()
             agent_registry.register("flaky_key", flaky)
-            
+
             node = AgentNode()
             self.state["selected_agent"] = "flaky_key"
-            
+
             from app.orchestrator.errors import AgentExecutionError
+
             with self.assertRaises(AgentExecutionError):
                 await node(self.state)
-                
-            self.assertTrue(any("Agent execution failed" in err for err in self.state["errors"]))
-            
+
+            self.assertTrue(
+                any("Agent execution failed" in err for err in self.state["errors"])
+            )
+
         self.loop.run_until_complete(run_test())
+
 
 if __name__ == "__main__":
     unittest.main()

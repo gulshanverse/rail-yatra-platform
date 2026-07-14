@@ -37,15 +37,17 @@ Respond ONLY with a JSON object matching this structure:
 Do not include markdown code blocks or additional comments.
 """
 
+
 class JourneyIntelligenceAgent(BaseAgent):
     """
     Agent responsible for translating user query requests into structured parameters,
     running the Journey Intelligence Engine, and formatting decision reports.
     """
+
     def __init__(self):
         super().__init__(
             name="JourneyIntelligenceAgent",
-            system_prompt="You are the Journey Intelligence Agent representing the decision engine."
+            system_prompt="You are the Journey Intelligence Agent representing the decision engine.",
         )
 
     async def _parse_query(self, user_message: str) -> TravelRequirement:
@@ -53,33 +55,37 @@ class JourneyIntelligenceAgent(BaseAgent):
         try:
             messages = [
                 SystemMessage(content=EXTRACTION_PROMPT),
-                HumanMessage(content=user_message)
+                HumanMessage(content=user_message),
             ]
             response = await self.llm.ainvoke(messages)
             content = str(response.content).strip()
-            
+
             # Clean possible markdown formatting
-            clean_content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content, flags=re.MULTILINE).strip()
+            clean_content = re.sub(
+                r"^```(?:json)?\s*|\s*```$", "", content, flags=re.MULTILINE
+            ).strip()
             data = json.loads(clean_content)
-            
+
             prefs = data.get("preferences", {})
             user_prefs = UserPreferences(
                 comfort=float(prefs.get("comfort", 1.0)),
                 budget=float(prefs.get("budget", 1.0)),
                 speed=float(prefs.get("speed", 1.0)),
-                reliability=float(prefs.get("reliability", 1.0))
+                reliability=float(prefs.get("reliability", 1.0)),
             )
-            
+
             return TravelRequirement(
                 source=data.get("source", "NDLS").upper(),
                 destination=data.get("destination", "BPL").upper(),
                 journey_date=data.get("journey_date", "2026-07-28"),
                 preferred_class=data.get("preferred_class", "3A").upper(),
-                preferences=user_prefs
+                preferences=user_prefs,
             )
         except Exception as e:
-            logger.error(f"Failed to parse query via LLM: {e}. Using baseline fallback requirement.")
-            
+            logger.error(
+                f"Failed to parse query via LLM: {e}. Using baseline fallback requirement."
+            )
+
             # General baseline heuristics fallback
             src, dest = "NDLS", "BPL"
             msg = user_message.upper()
@@ -89,19 +95,19 @@ class JourneyIntelligenceAgent(BaseAgent):
                 src = "HWH"
             if "MAS" in msg or "CHENNAI" in msg:
                 dest = "MAS"
-                
+
             return TravelRequirement(
                 source=src,
                 destination=dest,
                 journey_date="2026-07-28",
                 preferred_class="3A",
-                preferences=UserPreferences()
+                preferences=UserPreferences(),
             )
 
     async def run(self, user_message: str, context: Dict[str, Any] = None) -> str:
         # 1. Parse text message
         requirement = await self._parse_query(user_message)
-        
+
         # Override with active context parameters if present
         if context:
             if context.get("source"):
@@ -115,11 +121,13 @@ class JourneyIntelligenceAgent(BaseAgent):
 
         # 2. Execute deterministic analysis
         report = await journey_intelligence_engine.analyze_journey(requirement)
-        
+
         # 3. Return the compiled tradeoffs summary matrix
         return report.tradeoffs_summary
 
-    async def run_stream(self, user_message: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+    async def run_stream(
+        self, user_message: str, context: Dict[str, Any] = None
+    ) -> AsyncIterator[str]:
         # Stream the full report back as a single text chunk
         # Since the engine runs deterministically, we compute and stream the result.
         report_text = await self.run(user_message, context)
@@ -128,4 +136,5 @@ class JourneyIntelligenceAgent(BaseAgent):
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             import asyncio
+
             await asyncio.sleep(0.005)

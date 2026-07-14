@@ -5,8 +5,8 @@ from app.data.cache import railway_cache_manager
 from app.data.health import provider_health_monitor
 from app.data.manager import railway_data_manager
 
-class TestRailwayDataPlatform(unittest.TestCase):
 
+class TestRailwayDataPlatform(unittest.TestCase):
     def test_data_quality_metadata_parsing(self):
         """Verifies metadata Pydantic model validations."""
         meta = DataQualityMetadata(
@@ -14,7 +14,7 @@ class TestRailwayDataPlatform(unittest.TestCase):
             last_updated=1719918200.0,
             data_age_secs=10,
             confidence=0.9,
-            source_type="live"
+            source_type="live",
         )
         self.assertEqual(meta.provider, "test-provider")
         self.assertEqual(meta.source_type, "live")
@@ -27,7 +27,7 @@ class TestRailwayDataPlatform(unittest.TestCase):
 
         # Write to cache
         railway_cache_manager.set(data_type, key, mock_val)
-        
+
         # Retrieve from cache
         retrieved = railway_cache_manager.get(data_type, key)
         self.assertIsNotNone(retrieved)
@@ -37,7 +37,7 @@ class TestRailwayDataPlatform(unittest.TestCase):
     def test_health_monitor_failovers(self):
         """Verifies health monitor increments failures and toggles offline status."""
         provider = "irctc"
-        
+
         # Reset health state
         provider_health_monitor.record_success(provider)
         self.assertTrue(provider_health_monitor.is_healthy(provider))
@@ -45,9 +45,11 @@ class TestRailwayDataPlatform(unittest.TestCase):
         # Record failures up to threshold
         provider_health_monitor.record_failure(provider, threshold=2)
         provider_health_monitor.record_failure(provider, threshold=2)
-        
+
         self.assertFalse(provider_health_monitor.is_healthy(provider))
-        self.assertEqual(provider_health_monitor.get_status_report()[provider]["status"], "offline")
+        self.assertEqual(
+            provider_health_monitor.get_status_report()[provider]["status"], "offline"
+        )
 
         # Record success to restore
         provider_health_monitor.record_success(provider)
@@ -68,9 +70,10 @@ class TestRailwayDataPlatform(unittest.TestCase):
             self.assertIsNotNone(delay)
             self.assertEqual(delay.train_number, "12002")
             self.assertEqual(delay.avg_delay_mins, 12)
-            
+
         loop.run_until_complete(run_checks())
         loop.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

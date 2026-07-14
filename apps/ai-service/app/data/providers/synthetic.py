@@ -8,21 +8,21 @@ from app.data.models import (
     NormalizedSeatAvailability,
     NormalizedPnrStatus,
     NormalizedDelayHistory,
-    DataQualityMetadata
+    DataQualityMetadata,
 )
 from app.tools.train_search import TRAINS_DATABASE
-from app.engine.dataset import (
-    get_train_delay_metrics
-)
+from app.engine.dataset import get_train_delay_metrics
 from app.tools.pnr import get_pnr_status as get_pnr_mock
 
 logger = logging.getLogger("ai-service.data.providers.synthetic")
+
 
 class SyntheticRailwayProvider(BaseRailwayProvider):
     """
     Synthetic provider subclass feeding from sandbox dictionaries and local tools,
     serving as the main fallback/sandbox development source.
     """
+
     @property
     def name(self) -> str:
         return "synthetic"
@@ -33,32 +33,38 @@ class SyntheticRailwayProvider(BaseRailwayProvider):
             last_updated=time.time(),
             data_age_secs=0,
             confidence=1.0,
-            source_type="fallback_synthetic"
+            source_type="fallback_synthetic",
         )
 
-    async def search_trains(self, source: str, destination: str) -> List[NormalizedTrain]:
+    async def search_trains(
+        self, source: str, destination: str
+    ) -> List[NormalizedTrain]:
         src = source.strip().upper()
         dest = destination.strip().upper()
-        
+
         results = []
         for train in TRAINS_DATABASE:
             if train["source"] == src and train["destination"] == dest:
-                results.append(NormalizedTrain(
-                    train_number=train["train_number"],
-                    train_name=train["name"],
-                    source=train["source"],
-                    destination=train["destination"],
-                    departure=train["departure"],
-                    arrival=train["arrival"],
-                    duration=train["duration"],
-                    runs_on=train["runs_on"],
-                    classes=train["classes"],
-                    base_fare=train["base_fare"],
-                    data_quality=self._get_metadata()
-                ))
+                results.append(
+                    NormalizedTrain(
+                        train_number=train["train_number"],
+                        train_name=train["name"],
+                        source=train["source"],
+                        destination=train["destination"],
+                        departure=train["departure"],
+                        arrival=train["arrival"],
+                        duration=train["duration"],
+                        runs_on=train["runs_on"],
+                        classes=train["classes"],
+                        base_fare=train["base_fare"],
+                        data_quality=self._get_metadata(),
+                    )
+                )
         return results
 
-    async def get_station_details(self, station_code: str) -> Optional[NormalizedStation]:
+    async def get_station_details(
+        self, station_code: str
+    ) -> Optional[NormalizedStation]:
         code = station_code.strip().upper()
         names = {
             "NDLS": "New Delhi Railway Station",
@@ -67,13 +73,11 @@ class SyntheticRailwayProvider(BaseRailwayProvider):
             "HWH": "Howrah Junction",
             "CSMT": "Chhatrapati Shivaji Maharaj Terminus",
             "RKMP": "Rani Kamalapati",
-            "NZM": "Hazrat Nizamuddin"
+            "NZM": "Hazrat Nizamuddin",
         }
         name = names.get(code, f"{code} Railway Station")
         return NormalizedStation(
-            code=code,
-            name=name,
-            data_quality=self._get_metadata()
+            code=code, name=name, data_quality=self._get_metadata()
         )
 
     async def get_seat_availability(
@@ -82,7 +86,7 @@ class SyntheticRailwayProvider(BaseRailwayProvider):
         source: str,
         destination: str,
         journey_date: str,
-        booking_class: str
+        booking_class: str,
     ) -> Optional[NormalizedSeatAvailability]:
         # Synthesize status based on train matching
         status = "Available 24"
@@ -94,22 +98,22 @@ class SyntheticRailwayProvider(BaseRailwayProvider):
                     status = "WL 14"
                 elif "Kerala" in t["name"]:
                     status = "WL 25"
-                    
+
         return NormalizedSeatAvailability(
             train_number=train_number,
             booking_class=booking_class.upper(),
             waitlist_status=status,
             fare=fare,
-            data_quality=self._get_metadata()
+            data_quality=self._get_metadata(),
         )
 
     async def get_pnr_status(self, pnr: str) -> Optional[NormalizedPnrStatus]:
         res = get_pnr_mock(pnr)
         if not res.get("success"):
             return None
-            
+
         # Parse PNR probability mapping
-        
+
         return NormalizedPnrStatus(
             pnr=pnr,
             train_number=res["train_number"],
@@ -118,15 +122,17 @@ class SyntheticRailwayProvider(BaseRailwayProvider):
             booking_class=res["booking_class"],
             chart_status=res["chart_status"],
             passengers=res["passengers"],
-            data_quality=self._get_metadata()
+            data_quality=self._get_metadata(),
         )
 
-    async def get_delay_history(self, train_number: str) -> Optional[NormalizedDelayHistory]:
+    async def get_delay_history(
+        self, train_number: str
+    ) -> Optional[NormalizedDelayHistory]:
         metrics = get_train_delay_metrics(train_number)
         return NormalizedDelayHistory(
             train_number=train_number,
             avg_delay_mins=metrics["avg_delay_mins"],
             punctuality_rating=metrics["punctuality_rating"],
             cancellation_rate_percent=metrics["cancellation_rate_percent"],
-            data_quality=self._get_metadata()
+            data_quality=self._get_metadata(),
         )

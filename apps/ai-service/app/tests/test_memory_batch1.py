@@ -5,7 +5,7 @@ from app.config.config import settings
 from app.memory.exceptions import (
     MemorySystemException,
     QdrantUnreachable,
-    MemoryQuotaExceededException
+    MemoryQuotaExceededException,
 )
 from app.memory.interfaces import (
     MemoryItem,
@@ -14,8 +14,9 @@ from app.memory.interfaces import (
     UnifiedContextPayload,
     IMemoryManager,
     IShortTermMemory,
-    ILongTermMemory
+    ILongTermMemory,
 )
+
 
 def test_settings_memory_configs():
     """Verify that memory configurations are successfully parsed and loaded."""
@@ -47,11 +48,12 @@ def test_settings_memory_configs():
     assert settings.AGENT_SHARED_MEMORY_ENABLED is True
     assert settings.DATA_RESIDENCY_REGION == "IN"
 
+
 def test_exceptions_structure():
     """Verify memory custom exceptions inheritance and parameters."""
     with pytest.raises(QdrantUnreachable) as exc:
         raise QdrantUnreachable("Qdrant is down", {"host": "localhost", "port": 6333})
-    
+
     assert exc.value.message == "Qdrant is down"
     assert exc.value.details == {"host": "localhost", "port": 6333}
     assert isinstance(exc.value, MemorySystemException)
@@ -60,6 +62,7 @@ def test_exceptions_structure():
         raise MemoryQuotaExceededException("Quota exceeded")
     assert exc.value.message == "Quota exceeded"
     assert exc.value.details == {}
+
 
 def test_memory_item_pydantic_schema():
     """Verify that MemoryItem compiles and validates types correctly."""
@@ -73,7 +76,7 @@ def test_memory_item_pydantic_schema():
         schema_version=1,
         created_at=now,
         accessed_at=now,
-        is_active=True
+        is_active=True,
     )
 
     assert item.id == "mem-123"
@@ -92,8 +95,9 @@ def test_memory_item_pydantic_schema():
             session_id="session-789",
             text="invalid importance",
             version_id="ver-001",
-            importance=1.5 # Out of bounds
+            importance=1.5,  # Out of bounds
         )
+
 
 def test_conversation_session_pydantic_schema():
     """Verify that ConversationSession validates schemas correctly."""
@@ -102,10 +106,10 @@ def test_conversation_session_pydantic_schema():
         user_id="user-456",
         history=[
             {"role": "user", "content": "Book a ticket"},
-            {"role": "assistant", "content": "Which train?"}
+            {"role": "assistant", "content": "Which train?"},
         ],
         context={"active_pnr": "1234567890"},
-        metadata={"platform": "web"}
+        metadata={"platform": "web"},
     )
 
     assert session.session_id == "session-789"
@@ -114,12 +118,11 @@ def test_conversation_session_pydantic_schema():
     assert session.metadata == {"platform": "web"}
     assert session.last_active_at <= time.time()
 
+
 def test_rag_document_and_payload_pydantic_schema():
     """Verify that RAGDocument and UnifiedContextPayload parse correctly."""
     doc = RAGDocument(
-        id="doc-001",
-        content="Luggage allowance is 40kg",
-        source="railway_rules"
+        id="doc-001", content="Luggage allowance is 40kg", source="railway_rules"
     )
     assert doc.id == "doc-001"
     assert doc.content == "Luggage allowance is 40kg"
@@ -130,12 +133,13 @@ def test_rag_document_and_payload_pydantic_schema():
         user_message="Hello",
         history=[],
         memories=[],
-        knowledge_docs=[doc]
+        knowledge_docs=[doc],
     )
 
     assert payload.system_prompt == "You are a helper."
     assert len(payload.knowledge_docs) == 1
     assert payload.knowledge_docs[0].id == "doc-001"
+
 
 def test_protocols_runtime_checkable():
     """Verify that Protocols are checkable using isinstance (with runtime_checkable)."""

@@ -11,12 +11,11 @@ When responding:
 3. If the information is not in the knowledge base, state clearly that you do not know, rather than fabricating.
 """
 
+
 class KnowledgeAgent(BaseAgent):
     """
     Agent responsible for interfacing with vector DB context for RAG inquiries.
     """
+
     def __init__(self):
-        super().__init__(
-            name="KnowledgeAgent",
-            system_prompt=KNOWLEDGE_PROMPT
-        )
+        super().__init__(name="KnowledgeAgent", system_prompt=KNOWLEDGE_PROMPT)

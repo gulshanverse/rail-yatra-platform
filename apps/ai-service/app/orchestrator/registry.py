@@ -5,12 +5,14 @@ from app.orchestrator.interfaces import IAgent, IRegistry
 
 logger = logging.getLogger("ai-service.orchestrator.registry")
 
+
 class AgentRegistry(IRegistry):
     """
     Registry pattern mapping agent identifiers to concrete agent instances.
     Provides dependency lookup and supports registration on startup.
     Thread-safe implementation for instantiation and register/get lookups.
     """
+
     _instance: Optional["AgentRegistry"] = None
     _lock: threading.Lock = threading.Lock()
 
@@ -25,15 +27,21 @@ class AgentRegistry(IRegistry):
 
     def register(self, key: str, agent: IAgent) -> None:
         if not isinstance(agent, IAgent):
-            raise TypeError(f"Object registered under '{key}' must conform to IAgent protocol.")
+            raise TypeError(
+                f"Object registered under '{key}' must conform to IAgent protocol."
+            )
         with self._registry_lock:
             self._registry[key] = agent
-        logger.info(f"Successfully registered agent: key='{key}' class='{agent.__class__.__name__}'")
+        logger.info(
+            f"Successfully registered agent: key='{key}' class='{agent.__class__.__name__}'"
+        )
 
     def get(self, key: str) -> IAgent:
         with self._registry_lock:
             if key not in self._registry:
-                raise KeyError(f"Specialist agent '{key}' is not registered in the AgentRegistry.")
+                raise KeyError(
+                    f"Specialist agent '{key}' is not registered in the AgentRegistry."
+                )
             return self._registry[key]
 
 

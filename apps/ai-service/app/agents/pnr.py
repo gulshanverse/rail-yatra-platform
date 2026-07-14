@@ -11,12 +11,11 @@ When checking PNR:
 3. Show waitlist position transitions (e.g. from WL 24 to WL 12).
 """
 
+
 class PNRAgent(BaseAgent):
     """
     Agent responsible for checking PNR status and booking transition records.
     """
+
     def __init__(self):
-        super().__init__(
-            name="PNRAgent",
-            system_prompt=PNR_PROMPT
-        )
+        super().__init__(name="PNRAgent", system_prompt=PNR_PROMPT)

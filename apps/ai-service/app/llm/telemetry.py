@@ -1,11 +1,13 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
+
 class TelemetryPayload(BaseModel):
     """
     Telemetry model representing metrics captured for an LLM execution trace.
     No OpenTelemetry exporter bindings are initialized in Batch 1.
     """
+
     provider: str
     model: str
     latency_ms: float

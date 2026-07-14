@@ -1,10 +1,12 @@
 from pydantic import BaseModel, Field
 from typing import Dict
 
+
 class ModelMetadata(BaseModel):
     """
     Metadata config describing capabilities and tiers of a specific model.
     """
+
     provider: str
     model_name: str
     max_tokens: int
@@ -17,8 +19,9 @@ class ModelMetadata(BaseModel):
     pricing_placeholder: Dict[str, float] = Field(
         default_factory=lambda: {"input_cost_per_m": 0.0, "output_cost_per_m": 0.0}
     )
-    latency_tier: str       # low, medium, high
-    reasoning_tier: str     # standard, high, reasoning
+    latency_tier: str  # low, medium, high
+    reasoning_tier: str  # standard, high, reasoning
+
 
 # Central database of model configurations
 SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
@@ -34,7 +37,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="low",
-        reasoning_tier="standard"
+        reasoning_tier="standard",
     ),
     # OpenAI models
     "gpt-4o-mini": ModelMetadata(
@@ -48,7 +51,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="low",
-        reasoning_tier="standard"
+        reasoning_tier="standard",
     ),
     "gpt-4o": ModelMetadata(
         provider="openai",
@@ -61,7 +64,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="medium",
-        reasoning_tier="high"
+        reasoning_tier="high",
     ),
     # Google Gemini models
     "gemini-1.5-flash": ModelMetadata(
@@ -75,7 +78,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="low",
-        reasoning_tier="standard"
+        reasoning_tier="standard",
     ),
     "gemini-1.5-pro": ModelMetadata(
         provider="gemini",
@@ -88,7 +91,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="high",
-        reasoning_tier="high"
+        reasoning_tier="high",
     ),
     # Anthropic models
     "claude-3-5-sonnet": ModelMetadata(
@@ -102,7 +105,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="medium",
-        reasoning_tier="high"
+        reasoning_tier="high",
     ),
     "claude-3-5-haiku": ModelMetadata(
         provider="anthropic",
@@ -115,7 +118,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="low",
-        reasoning_tier="standard"
+        reasoning_tier="standard",
     ),
     # Groq models
     "llama3-8b-8192": ModelMetadata(
@@ -129,7 +132,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="low",
-        reasoning_tier="standard"
+        reasoning_tier="standard",
     ),
     "llama3-70b-8192": ModelMetadata(
         provider="groq",
@@ -142,7 +145,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="medium",
-        reasoning_tier="high"
+        reasoning_tier="high",
     ),
     # Azure OpenAI models
     "azure-gpt-4o": ModelMetadata(
@@ -156,7 +159,7 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=True,
         supports_function_calling=True,
         latency_tier="medium",
-        reasoning_tier="high"
+        reasoning_tier="high",
     ),
     # Ollama local models
     "llama3": ModelMetadata(
@@ -170,6 +173,6 @@ SUPPORTED_MODELS: Dict[str, ModelMetadata] = {
         supports_json_mode=False,
         supports_function_calling=True,
         latency_tier="low",
-        reasoning_tier="standard"
-    )
+        reasoning_tier="standard",
+    ),
 }

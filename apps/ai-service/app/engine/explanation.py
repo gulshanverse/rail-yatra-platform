@@ -3,14 +3,17 @@ from typing import List, Dict, Any
 
 logger = logging.getLogger("ai-service.engine.explanation")
 
-def generate_option_explanations(option: Dict[str, Any], sub_scores: Dict[str, float]) -> Dict[str, Any]:
+
+def generate_option_explanations(
+    option: Dict[str, Any], sub_scores: Dict[str, float]
+) -> Dict[str, Any]:
     """
     Analyzes scores and stats of a travel option to deterministically compile
     its list of advantages, disadvantages, and reasoning summary.
     """
     advantages = []
     disadvantages = []
-    
+
     # 1. Cost analysis
     if sub_scores["cost"] >= 80:
         advantages.append(f"Budget-friendly fare: Rs. {option['fare']}")
@@ -30,21 +33,33 @@ def generate_option_explanations(option: Dict[str, Any], sub_scores: Dict[str, f
 
     # 4. Reliability/Delay analysis
     if option["predicted_delay_mins"] <= 15:
-        advantages.append(f"Highly punctual (Avg. Delay: {option['predicted_delay_mins']} mins)")
+        advantages.append(
+            f"Highly punctual (Avg. Delay: {option['predicted_delay_mins']} mins)"
+        )
     else:
-        disadvantages.append(f"Risk of delay: ~{option['predicted_delay_mins']} minutes late average")
+        disadvantages.append(
+            f"Risk of delay: ~{option['predicted_delay_mins']} minutes late average"
+        )
 
     # 5. Waitlist clearing analysis
     if option["confirmation_probability"] >= 90:
-        advantages.append(f"High confirmation probability ({option['confirmation_probability']}% clearance)")
+        advantages.append(
+            f"High confirmation probability ({option['confirmation_probability']}% clearance)"
+        )
     elif option["confirmation_probability"] <= 50:
-        disadvantages.append(f"Low waitlist clearance chance ({option['confirmation_probability']}% clearing probability)")
+        disadvantages.append(
+            f"Low waitlist clearance chance ({option['confirmation_probability']}% clearing probability)"
+        )
 
     # Format tags for display
     if option.get("is_alternative_station"):
-        advantages.append(f"Alternative boarding point: {option['source']} (original: {option['original_boarding_station']})")
+        advantages.append(
+            f"Alternative boarding point: {option['source']} (original: {option['original_boarding_station']})"
+        )
     if option.get("is_alternative_date"):
-        advantages.append(f"Alternative date: {option['journey_date']} (original: {option['original_journey_date']})")
+        advantages.append(
+            f"Alternative date: {option['journey_date']} (original: {option['original_journey_date']})"
+        )
 
     # Construct reasoning snippet
     reasoning = (
@@ -56,8 +71,9 @@ def generate_option_explanations(option: Dict[str, Any], sub_scores: Dict[str, f
     return {
         "advantages": advantages,
         "disadvantages": disadvantages,
-        "reasoning": reasoning
+        "reasoning": reasoning,
     }
+
 
 def compile_tradeoffs_report(options: List[Any]) -> str:
     """
@@ -85,7 +101,7 @@ def compile_tradeoffs_report(options: List[Any]) -> str:
             alt_label = " *(Alternate Date)*"
 
         report += (
-            f"{i+1}. **{opt.train_name}** | Class: **{opt.booking_class}** | Score: **{opt.overall_score}**{alt_label}\n"
+            f"{i + 1}. **{opt.train_name}** | Class: **{opt.booking_class}** | Score: **{opt.overall_score}**{alt_label}\n"
             f"   - **Reason Codes**: `{', '.join(opt.reason_codes)}` | Fare: Rs. {opt.fare} | Predicted Delay: {opt.predicted_delay_mins} mins\n"
             f"   - **Pros**: {', '.join(opt.advantages[:3])}\n"
         )

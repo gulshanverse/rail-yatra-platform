@@ -1,11 +1,19 @@
 from abc import ABC, abstractmethod
-from app.llm.interfaces import LLMProvider, ProviderMetadata, HealthMetadata, ChatRequest, ChatResponse
+from app.llm.interfaces import (
+    LLMProvider,
+    ProviderMetadata,
+    HealthMetadata,
+    ChatRequest,
+    ChatResponse,
+)
+
 
 class BaseProvider(LLMProvider, ABC):
     """
     Abstract Base Class for LLM providers.
     All concrete provider integrations must inherit from this class.
     """
+
     def __init__(self, name: str) -> None:
         self._name = name.strip().lower()
 

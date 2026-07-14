@@ -1,6 +1,7 @@
 import unittest
 from app.orchestrator.state import AIState
 
+
 class TestAIState(unittest.TestCase):
     def test_state_creation(self):
         # Verify AIState initialization and default keys matching typed requirements
@@ -21,7 +22,7 @@ class TestAIState(unittest.TestCase):
             "response": "",
             "latency_ms": 0.0,
             "errors": [],
-            "timestamps": {}
+            "timestamps": {},
         }
         self.assertEqual(state["request_id"], "req-1")
         self.assertEqual(state["trace_id"], "tr-1")
@@ -33,6 +34,7 @@ class TestAIState(unittest.TestCase):
         self.assertEqual(state["execution_path"], [])
         self.assertEqual(state["response"], "")
         self.assertEqual(state["errors"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,10 +1,12 @@
 from typing import TypedDict, Dict, Any, List, Optional
 
+
 class AIState(TypedDict):
     """
     Strongly typed execution state passed between nodes in the LangGraph.
     Prevents arbitrary dictionary keys and ensures strict type checking.
     """
+
     request_id: str
     trace_id: str
     conversation_id: str
@@ -21,8 +23,10 @@ class AIState(TypedDict):
     response: str
     latency_ms: float
     errors: List[str]
-    timestamps: Dict[str, float]  # Tracks timestamps of node execution (start, end, node timings)
-    
+    timestamps: Dict[
+        str, float
+    ]  # Tracks timestamps of node execution (start, end, node timings)
+
     # Legacy compatibility fields (prevent LangGraph from filtering them out)
     user_message: Optional[str]
     history: Optional[List[Dict[str, Any]]]
