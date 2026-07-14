@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, AsyncIterator, Protocol, runtime_checkable
+from typing import Dict, Any, AsyncIterator, Protocol, runtime_checkable
 from app.orchestrator.types import AIResponse
 from app.orchestrator.state import AIState
 

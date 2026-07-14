@@ -72,7 +72,7 @@ async def startup_event():
         except Exception as e:
             logger.error(f"[FATAL CONNECTION ERROR] Redis ping failed during startup: {e}")
     
-    if not redis_healthy:
+    if os.getenv("ENV") == "production" and not redis_healthy:
         logger.critical("[FATAL CONFIGURATION ERROR] Redis connection is required. Process aborting.")
         import sys
         sys.exit(1)

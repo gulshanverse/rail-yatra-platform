@@ -40,12 +40,7 @@ async def chat_stream(request: ChatStreamRequest):
         "seat_preference": db_prefs.get("travelPrefs", {}).get("seat_preference", "lower"),
     }
     
-    inputs = {
-        "user_message": request.message,
-        "context": combined_context,
-        "history": short_term_memory.get_history(request.conversation_id)
-    }
-
+    
     async def event_generator():
         try:
             # 1. Execute the orchestration workflow pipeline

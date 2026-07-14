@@ -13,7 +13,6 @@ from app.orchestrator.nodes import (
 from app.orchestrator.constants import (
     NODE_CLASSIFIER,
     NODE_ROUTER,
-    NODE_AGENT,
     NODE_MEMORY,
     NODE_RESPONSE,
     NODE_ERROR,

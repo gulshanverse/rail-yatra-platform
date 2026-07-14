@@ -1,6 +1,6 @@
 import logging
 import threading
-from typing import Dict, Optional
+from typing import Optional
 from app.orchestrator.interfaces import IAgent, IRegistry
 
 logger = logging.getLogger("ai-service.orchestrator.registry")

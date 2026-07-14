@@ -5,9 +5,7 @@ from app.config.config import settings
 from app.memory.exceptions import (
     MemorySystemException,
     QdrantUnreachable,
-    TokenLimitExceeded,
-    MemoryQuotaExceededException,
-    SharedMemoryAccessException
+    MemoryQuotaExceededException
 )
 from app.memory.interfaces import (
     MemoryItem,

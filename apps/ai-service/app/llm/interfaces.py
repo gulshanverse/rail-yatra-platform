@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional, Protocol, runtime_checkable, Union
+from typing import Dict, Any, List, Optional, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 
