@@ -1,0 +1,2 @@
+# pyrefly.toml configuration for RailYatra AI Integration Platform
+python-interpreter-path = "apps/ai-service/venv/Scripts/python.exe"

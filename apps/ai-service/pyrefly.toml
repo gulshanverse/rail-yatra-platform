@@ -1,0 +1,2 @@
+# pyrefly.toml configuration for ai-service sub-workspace
+python-interpreter-path = "venv/Scripts/python.exe"
