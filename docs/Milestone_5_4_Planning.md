@@ -509,29 +509,296 @@ Implementation is broken into 5 sequential batches:
 
 ---
 
-## 16. Readiness Matrix
+## 16. BookingDecisionContext Factory
 
-| Subsystem Component | Design Status | Dependencies | Complexity | Priority | Risk | Testing Status | Ready Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gateway** | Frozen | Ingest DTOs | Low | High | Low | Planned | ✅ Ready |
-| **Candidate Builder** | Frozen | Config files | Medium | High | Low | Planned | ✅ Ready |
-| **Availability Engine** | Frozen | Cache wrapper | High | High | Medium | Planned | ✅ Ready |
-| **Confirmation Engine** | Frozen | Rules registry | Medium | High | Medium | Planned | ✅ Ready |
-| **Quota Engine** | Frozen | Profile models | Low | Medium | Low | Planned | ✅ Ready |
-| **Boarding Engine** | Frozen | Station coordinates | High | Medium | High | Planned | ✅ Ready |
-| **Constraint Engine** | Frozen | Profile constraints | Low | High | Low | Planned | ✅ Ready |
-| **Risk Engine** | Frozen | Context variables | Medium | High | High | Planned | ✅ Ready |
-| **Scoring Engine** | Frozen | Config weights | Low | High | Low | Planned | ✅ Ready |
-| **Strategy Engine** | Frozen | Strategy registry | Low | Medium | Low | Planned | ✅ Ready |
-| **Ranking Engine** | Frozen | Candidates list | Low | Medium | Low | Planned | ✅ Ready |
-| **Explanation Engine** | Frozen | Reason codes | Low | Medium | Low | Planned | ✅ Ready |
-| **Audit Engine** | Frozen | Database pool | Low | High | Low | Planned | ✅ Ready |
-| **Metrics Engine** | Frozen | StatSD client | Low | Medium | Low | Planned | ✅ Ready |
-| **Health Engine** | Frozen | Pings endpoints | Low | Medium | Low | Planned | ✅ Ready |
+The `BookingDecisionContextFactory` is the sole component responsible for the instantiation, initial validation, and schema upgrades of the context model.
+
+*   **Responsibilities:** Validates mandatory fields (correlation ID, query, traveler profile), registers processing start timers, and instantiates context blocks.
+*   **Enrichment:** Sub-engines enrich the context by returning a copy containing their validated calculations. No engine may write to the fields directly.
+*   **Cloning & Propagation:** Implements deep-copy methods to duplicate context values when spawning alternative recovery evaluations.
 
 ---
 
-## 17. Quality Gates
+## 17. Strategy Plugin Registry
+
+The `BookingStrategyRegistry` provides a dynamic registration mechanism for evaluating strategies:
+
+```python
+class BookingStrategyRegistry:
+    def __init__(self):
+        self._strategies = {}
+
+    def register(self, key: str, strategy: IStrategy):
+        self._strategies[key] = strategy
+
+    def get(self, key: str) -> IStrategy:
+        return self._strategies.get(key)
+```
+
+*   **Strategies Supported:**
+    *   `HighestConfirmationStrategy`: prioritize seat certainty.
+    *   `LowestRiskStrategy`: prioritizes buffer margins.
+    *   `BudgetStrategy`: Filters dynamic pricing segments.
+    *   `ComfortStrategy`: prioritizes 1A/2A cabins.
+    *   `TatkalStrategy`: Activates Tatkal searches.
+    *   `PremiumTatkalStrategy`: Dynamic pricing targets.
+    *   `QuotaOptimizationStrategy`: Matches senior/ladies eligibility.
+    *   `BoardingOptimizationStrategy`: Shifts boarding stations.
+    *   `FlexibleBookingStrategy`: Timetable search variance ($\pm 1$ day).
+    *   `FamilyBookingStrategy`: Groups berths together.
+    *   `BusinessBookingStrategy`: prioritize timing & Wi-Fi.
+    *   `MedicalBookingStrategy`: SLR layouts, step-free access.
+    *   `StudentBookingStrategy`: Maximize low-cost tickets.
+    *   `EmergencyBookingStrategy`: Reroutes cancellations instantly.
+
+---
+
+## 18. Enterprise Policy Resolution Engine
+
+The `PolicyResolver` acts as the single gateway for retrieving runtime constraints:
+
+*   **Policies Covered:** Availability, Confirmation, Quota, Boarding, Constraint, Risk, Scoring, Strategy, Ranking, Recovery, Recommendation, Audit, and Metrics.
+*   **Ownership:** Configuration Module.
+*   **Conflict Resolution:** Resolves rules overlap by ordering constraints hierarchically (Hard constraints always override soft optimization preferences).
+
+---
+
+## 19. Enterprise Cache Strategy
+
+Redis caching handles temporal data partitions:
+
+| Cache Partition | Purpose | Ownership | TTL | Invalidation | Fallback Behavior |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Availability Cache** | Stores seat snapshot limits. | Avail Engine | 300s | Auto-expires | Degrade to history logs |
+| **Confirmation Cache** | Stores waitlist chances stats. | Conf Engine | 3600s | Manual write | Revert to standard WL curve |
+| **Recommendation Cache**| Stores outputs recommendations. | Rec Manager | 900s | TTL-expired event | Rerun builder calculations |
+| **Strategy Cache** | Stores strategies configurations. | Strategy Reg | 86400s | Reload on webhook | Default strategy rules |
+| **Policy Cache** | Stores policy rules sets. | Policy Resolver| 86400s | Reload on webhook | Read from disk YAML |
+| **Configuration Cache** | Stores environment variables overrides. | Config Manager | 86400s | Config reload | Read default parameters |
+| **Explanation Cache** | Stores reason templates translation. | Explain Engine | 86400s | Webhook reload | Default reason code tags |
+| **Metrics Cache** | Accumulates telemetry values. | Metrics Engine | 60s | Write-back event | Discard metrics buffers |
+
+---
+
+## 20. Sequence Diagram Expansion
+
+### 20.1 Booking Recommendation Sequence
+```mermaid
+sequenceDiagram
+    participant AI as AI Runtime
+    participant GW as BookingGateway
+    participant CO as Coordinator
+    participant AV as AvailabilityEngine
+    participant SC as ScoringEngine
+    participant EX as ExplanationEngine
+
+    AI->>GW: Request Booking Options (Journey ID, Profile)
+    GW->>CO: evaluate_booking()
+    CO->>AV: verify_availability()
+    AV-->>CO: Return seat inventories
+    CO->>SC: compute_booking_score()
+    SC-->>CO: Return scoring matrices
+    CO->>EX: generate_explanations()
+    EX-->>CO: Return explanation DTO
+    CO-->>GW: Return BookingRecommendationDTO
+    GW-->>AI: Return recommendation
+```
+
+### 20.2 Quota Selection Sequence
+```mermaid
+sequenceDiagram
+    participant CO as Coordinator
+    participant QE as QuotaEngine
+    participant CE as ConstraintEngine
+
+    CO->>QE: resolve_quotas(traveler_profile)
+    Note over QE: Checks eligibility checks (Senior Citizen / Ladies / Defence)
+    QE-->>CO: Return eligible quota class codes
+    CO->>CE: prune_candidates()
+    Note over CE: Removes candidates failing age/gender validations
+    CE-->>CO: Return pruned candidate options
+```
+
+### 20.3 Boarding Point Shift Sequence
+```mermaid
+sequenceDiagram
+    participant CO as Coordinator
+    participant BO as BoardingOptimizer
+    participant AV as AvailabilityEngine
+
+    CO->>BO: optimize_boarding()
+    Note over BO: Detects sold-out sector
+    BO->>AV: verify_availability(earlier_boarding_point)
+    AV-->>BO: Seats available in General Quota
+    Note over BO: Calculate walk distance and cost delta
+    BO-->>CO: Return BoardingPointShift DTO (with warning advisory)
+```
+
+### 20.4 Booking Connection Recovery
+```mermaid
+sequenceDiagram
+    participant EL as EventLoop
+    participant RM as RecoveryManager
+    participant CO as Coordinator
+    participant GW as BookingGateway
+
+    EL->>RM: BookingFailedEvent (Seat sold out at checkout)
+    RM->>CO: Trigger recovery workflow
+    Note over CO: Tatkal Backup Playbook active
+    CO->>CO: Rerun search configurations
+    CO-->>RM: Return backup recommendation
+    RM-->>GW: Dispatch Recovery options to traveler
+```
+
+### 20.5 Recommendation Expiry & Refresh
+```mermaid
+sequenceDiagram
+    participant CM as CacheManager
+    participant AI as AI Runtime
+    participant CO as Coordinator
+
+    Note over CM: Recommendation cached (TTL 15m)
+    CM->>CM: TTL Expires
+    CM-->>AI: Dispatch RecommendationExpired Event
+    AI->>CO: Request Refresh Query
+    CO->>CO: Re-verify availability snapshot
+    CO-->>AI: Return fresh Recommendation DTO
+```
+
+---
+
+## 21. Repository Dependency Matrix
+
+To prevent architectural coupling, repository layers are isolated and structured as follows:
+
+| Repository Name | Read Model | Write Model | Cache Usage | Persistence | Ownership | Transactions | Consumers | Dependencies |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **BookingRepository** | `Booking` status | Create/Update | None | PostgreSQL | Booking Core | Required (ACID) | Gateway | `IBookingGateway` |
+| **RecommendationRepository** | `Recommendation` | Create/Expire | Redis cache read | Redis memory | Rec Manager | None | Coordinator | `ICacheManager` |
+| **AuditRepository** | Trace logs | Create trace | None | PostgreSQL | Audit Engine | None | Coordinator | `IAuditEngine` |
+| **MetricsRepository** | Telemetry logs | Log metrics | None | File system | Metrics Engine| None | Coordinator | `IMetricsEngine` |
+| **PolicyRepository** | Config policies | None | Redis cached | Local YAML | Policy Resolver| None | Engines | `IPolicyResolver` |
+| **ConfigurationRepository** | System properties | Update | Redis cached | Environment | Config Manager | None | Resolver | None |
+| **CacheRepository** | Raw bytes hashes | Save | Redis direct | Redis direct | Cache Service | None | Repositories | `ICacheManager` |
+
+---
+
+## 22. Domain Event Lifecycle
+
+The Booking module communicates state changes asynchronously using structured JSON events:
+
+*   **BookingEvaluated:**
+    *   *Trigger:* Scoring and risk checks complete.
+    *   *Payload:* `candidate_id`, `score_overall`, `risk_level`.
+    *   *Publisher:* Scoring Engine.
+    *   *Consumers:* Metrics Engine, Explanation Engine.
+    *   *Retention:* 1 month.
+*   **BookingRecommended:**
+    *   *Trigger:* Recommendation compiled and cached.
+    *   *Payload:* `recommendation_id`, `primary_candidate_id`.
+    *   *Publisher:* Recommendation Engine.
+    *   *Consumers:* Gateway Coordinator.
+    *   *Retention:* 1 month.
+*   **RecommendationGenerated:**
+    *   *Trigger:* final recommendation DTO serialized and returned.
+    *   *Payload:* `recommendation_id`, `correlation_id`.
+    *   *Publisher:* Gateway Coordinator.
+    *   *Consumers:* Audit Engine.
+    *   *Retention:* 7 years (audit log).
+*   **RecommendationAccepted / RecommendationRejected:**
+    *   *Trigger:* User accepts or rejects the suggested itinerary.
+    *   *Payload:* `recommendation_id`, `decision_id`, `reason_code`.
+    *   *Publisher:* Decision Manager.
+    *   *Consumers:* Audit Engine, Analytics Collector.
+    *   *Retention:* 7 years.
+*   **RecommendationExpired:**
+    *   *Trigger:* Cache TTL expires.
+    *   *Payload:* `recommendation_id`.
+    *   *Publisher:* Cache Manager.
+    *   *Consumers:* AI Runtime.
+    *   *Retention:* 24 hours.
+*   **RecoveryTriggered:**
+    *   *Trigger:* Seat sold out or waitlist stagnation detected.
+    *   *Payload:* `booking_id`, `failed_reason`.
+    *   *Publisher:* Recovery Manager.
+    *   *Consumers:* Coordinator, Alert Manager.
+    *   *Retention:* 1 year.
+*   **QuotaChanged / BoardingChanged:**
+    *   *Trigger:* Traveler selects alternate parameters.
+    *   *Payload:* `booking_id`, `original_value`, `new_value`.
+    *   *Publisher:* Coordinator.
+    *   *Consumers:* Audit Engine.
+    *   *Retention:* 7 years.
+*   **BookingCancelled:**
+    *   *Trigger:* GDS cancellation confirmed.
+    *   *Payload:* `booking_id`, `pnr`.
+    *   *Publisher:* Integration Gateway.
+    *   *Consumers:* Coordinator, Notification Engine.
+    *   *Retention:* 7 years.
+
+---
+
+## 23. Configuration Governance
+
+*   **Versioning:** Configuration models are versioned semantically (`config_schema_v1`).
+*   **Default Values:** Reside strictly within `app/booking/config/registry.py`. No default configurations may be hardcoded inside engines.
+*   **Migration Strategy:** Changes are deployed via standard environment variables and validated at boot time.
+*   **Rollback Strategy:** Reverting container deployments immediately restores the previous environment variable configurations.
+*   **Runtime Reload Policy:** Policy parameters are re-read dynamically upon receiving POSIX signals or config webhook calls.
+
+---
+
+## 24. Operational Runbook
+
+The Gateway Coordinator handles engine failures gracefully:
+
+*   **Availability Engine Failure:**
+    *   *Action:* Fall back to local cached snapshots.
+    *   *Advisory:* Append warning flag `WARNING_STALE_AVAILABILITY`.
+*   **Confirmation Engine Failure:**
+    *   *Action:* Bypass waitlist progression evaluation.
+    *   *Advisory:* Default confirmation probability to `LOW`.
+*   **Quota Engine Failure:**
+    *   *Action:* Disable concessional checks.
+    *   *Advisory:* Restrict traveler selections strictly to General Quota (GN).
+*   **Ranking Engine Failure:**
+    *   *Action:* Bypass custom tie-breakers.
+    *   *Advisory:* Sort options alphabetically by train number.
+*   **Recommendation / Explanation Failure:**
+    *   *Action:* Return recommendation with fallback reason codes `E_GENERIC_MATCH`.
+*   **Gateway Timeout:**
+    *   *Action:* Terminate evaluation thread if execution exceeds 100ms. Fallback to cached recommendation snapshots.
+
+---
+
+## 25. Enterprise Implementation Readiness Dashboard
+
+| Subsystem Component | Design Status | Dependencies | Interfaces | Repositories | DTOs | Configuration | Caching | Testing Status | Target Latency | Ready Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Gateway** | Frozen | Gateway DTO | `IBookingGateway` | Booking | Request | Validated | None | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Coordinator** | Frozen | Engines registry| `IBookingCoordinator` | None | Context | Validated | Cache Manager| Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Candidate Builder**| Frozen | Config maps | `ICandidateBuilder` | None | Candidate | Validated | None | Planned | $\le 10\text{ms}$ | ✅ Ready |
+| **Availability** | Frozen | Cache gateway | `IAvailabilityEngine` | None | Available | Validated | Redis cache | Planned | $\le 30\text{ms}$ | ✅ Ready |
+| **Confirmation** | Frozen | Telemetry tables| `IConfirmationEngine` | None | Confirm | Validated | Redis cache | Planned | $\le 10\text{ms}$ | ✅ Ready |
+| **Quota** | Frozen | Profile models | `IQuotaEngine` | None | Quota | Validated | None | Planned | $\le 10\text{ms}$ | ✅ Ready |
+| **Boarding** | Frozen | Station coords | `IBoardingEngine` | None | Boarding | Validated | None | Planned | $\le 10\text{ms}$ | ✅ Ready |
+| **Constraints** | Frozen | Profile constraints | `IConstraintEngine` | None | Context | Validated | None | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Risk** | Frozen | Context variables| `IRiskEngine` | None | Risk | Validated | None | Planned | $\le 10\text{ms}$ | ✅ Ready |
+| **Scoring** | Frozen | Weight configs | `IScoringEngine` | None | Score | Validated | None | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Strategy** | Frozen | Strategy registry| `IStrategy` | None | Strategy | Validated | Redis cache | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Ranking** | Frozen | Candidates list | `IRankingEngine` | None | Context | Validated | None | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Conflict Resolution**| Frozen | Overrides mapping| `IConflictResolver` | None | Context | Validated | None | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Recovery** | Frozen | Playbook cache | `IRecoveryEngine` | None | Context | Validated | None | Planned | $\le 15\text{ms}$ | ✅ Ready |
+| **Recommendation** | Frozen | Cache Manager | `IRecommendationEngine`| Recs | Rec DTO | Validated | Redis cache | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Explanation** | Frozen | Template configs | `IExplanationEngine` | None | Explain | Validated | Redis cache | Planned | $\le 5\text{ms}$ | ✅ Ready |
+| **Audit** | Frozen | Logger db pools | `IAuditEngine` | Audit | Audit | Validated | None | Planned | $\le 2\text{ms}$ | ✅ Ready |
+| **Metrics** | Frozen | StatsD client | `IMetricsEngine` | Metrics | Metrics | Validated | Memory | Planned | $\le 2\text{ms}$ | ✅ Ready |
+| **Health** | Frozen | Health checkers | `IHealthEngine` | None | Context | Validated | None | Planned | $\le 2\text{ms}$ | ✅ Ready |
+| **Events** | Frozen | Event queue | `IEventPublisher` | None | Context | Validated | None | Planned | $\le 2\text{ms}$ | ✅ Ready |
+
+---
+
+## 26. Quality Gates
 
 1.  **Architecture Validation:** Automated import checkers verify no GDS package references exist inside `app/booking/`.
 2.  **Lint:** Ruff checks must return zero errors.
@@ -542,7 +809,7 @@ Implementation is broken into 5 sequential batches:
 
 ---
 
-## 18. Risk Register
+## 27. Risk Register
 
 *   **Dependency Drift:** Phase 5.2/5.3 updates alter data structures.
     *   *Mitigation:* Interfaces are bounded using rigid contract classes. Changes to schemas trigger compilation warnings.
@@ -553,7 +820,7 @@ Implementation is broken into 5 sequential batches:
 
 ---
 
-## 19. Architecture Consistency Review
+## 28. Architecture Consistency Review
 
 *   ✓ Discovery parameters fully mapped.
 *   ✓ Decoupling bounds preserved (zero CRIS/NTES leakages).
@@ -562,7 +829,7 @@ Implementation is broken into 5 sequential batches:
 
 ---
 
-## 20. Planning Readiness Assessment
+## 29. Planning Readiness Assessment
 
 The Planning phase is assessed below:
 *   **Package Structure Definition:** 100/100
@@ -572,11 +839,12 @@ The Planning phase is assessed below:
 
 ---
 
-## 21. Definition of Done (DoD)
+## 30. Definition of Done (DoD)
 
 Milestone 5.4 Planning is complete when:
-1.  All 21 technical planning chapters are fully documented.
+1.  All 30 technical planning chapters are fully documented.
 2.  Python interfaces and contract DTO structures are designed.
 3.  The plan is saved in the workspace under `/docs/Milestone_5_4_Planning.md`.
 
-**PLANNING FREEZE PENDING IMPLEMENTATION REVIEW**
+**PLANNING FREEZE APPROVED**
+
