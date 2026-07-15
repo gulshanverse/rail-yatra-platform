@@ -57,6 +57,7 @@ class TTLCleanupWorker(BaseWorker):
         cleared = 0
 
         from app.memory.short_term import short_term_memory
+
         fallback = short_term_memory.fallback_store
         from app.memory.session import ConversationSessionMetadata
         from app.memory.serializer import MemorySerializer
@@ -102,6 +103,7 @@ class LockCleanupWorker(BaseWorker):
 
         # Sweep Redis lock keys if Redis is active
         from app.memory.short_term import short_term_memory
+
         if short_term_memory.redis_client:
             try:
                 # Scan lock keys in Redis

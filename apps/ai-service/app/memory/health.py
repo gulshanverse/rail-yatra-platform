@@ -39,6 +39,7 @@ class HealthMonitor:
     def evaluate_status(self) -> Dict[str, Any]:
         """Assess overall connectivity, fallback usage, and worker counts."""
         from app.memory.short_term import short_term_memory
+
         redis_up = False
         if short_term_memory.redis_client:
             try:
