@@ -176,6 +176,17 @@ class ShortTermMemory(IShortTermMemory):
 
         self.concurrency_mgr = ConcurrencyManager(self)
 
+        # Initialize RecoveryManager
+        from app.memory.recovery import RecoveryManager
+
+        self.recovery_mgr = RecoveryManager(self)
+
+        # Start Supervisor monitoring and cleanup worker loops
+        from app.memory.workers import supervisor
+
+        if not supervisor.running:
+            supervisor.start_all_workers()
+
     def _init_redis(self) -> None:
         try:
             self.redis_client = redis.Redis.from_url(
@@ -193,7 +204,9 @@ class ShortTermMemory(IShortTermMemory):
         if self.redis_client is None:
             return False
         try:
-            self.redis_client.ping()
+            from app.memory.healing import circuit_breaker
+
+            circuit_breaker.execute(self.redis_client.ping)
             return True
         except Exception:
             return False
@@ -547,7 +560,9 @@ class ShortTermMemory(IShortTermMemory):
         if self._is_redis_active():
             try:
                 engine = RedisShortTermMemory(self.redis_client)
-                engine.delete_session(user_id, session_id)
+                from app.memory.healing import circuit_breaker
+
+                circuit_breaker.execute(engine.delete_session, user_id, session_id)
             except Exception as e:
                 logger.error(f"Redis delete_session error: {e}")
                 self.fallback_store.delete_session(user_id, session_id)
@@ -561,7 +576,9 @@ class ShortTermMemory(IShortTermMemory):
         if self._is_redis_active():
             try:
                 engine = RedisShortTermMemory(self.redis_client)
-                return engine.list_sessions(user_id)
+                from app.memory.healing import circuit_breaker
+
+                return circuit_breaker.execute(engine.list_sessions, user_id)
             except Exception as e:
                 logger.error(f"Redis list_sessions error: {e}")
                 return self.fallback_store.list_sessions(user_id)
@@ -576,7 +593,9 @@ class ShortTermMemory(IShortTermMemory):
         if self._is_redis_active():
             try:
                 engine = RedisShortTermMemory(self.redis_client)
-                raw_meta = engine.get_meta(session_id)
+                from app.memory.healing import circuit_breaker
+
+                raw_meta = circuit_breaker.execute(engine.get_meta, session_id)
             except Exception as e:
                 logger.error(f"Redis get_meta error: {e}")
                 raw_meta = self.fallback_store.get_meta(session_id)
@@ -594,7 +613,11 @@ class ShortTermMemory(IShortTermMemory):
         if self._is_redis_active():
             try:
                 engine = RedisShortTermMemory(self.redis_client)
-                raw_session = engine.get_session(user_id, session_id)
+                from app.memory.healing import circuit_breaker
+
+                raw_session = circuit_breaker.execute(
+                    engine.get_session, user_id, session_id
+                )
             except Exception as e:
                 logger.error(f"Redis get_session error: {e}")
                 raw_session = self.fallback_store.get_session(session_id)
@@ -624,8 +647,15 @@ class ShortTermMemory(IShortTermMemory):
         if self._is_redis_active():
             try:
                 engine = RedisShortTermMemory(self.redis_client)
-                engine.save_session(
-                    user_id, session_id, session_json, meta_json, meta.ttl
+                from app.memory.healing import circuit_breaker
+
+                circuit_breaker.execute(
+                    engine.save_session,
+                    user_id,
+                    session_id,
+                    session_json,
+                    meta_json,
+                    meta.ttl,
                 )
             except Exception as e:
                 logger.error(f"Redis save_session error: {e}")

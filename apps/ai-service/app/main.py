@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -10,6 +10,7 @@ from app.api.intelligence import router as intelligence_router
 from app.vector.qdrant import qdrant_rag
 from app.data.syncer import railway_background_syncer
 from app.memory.short_term import short_term_memory
+from app.memory.health import router as health_router
 
 
 # JSON Formatter for production logging
@@ -64,6 +65,7 @@ app.add_middleware(
 # Register routers
 app.include_router(api_router)
 app.include_router(intelligence_router)
+app.include_router(health_router)
 
 
 @app.on_event("startup")
@@ -116,52 +118,7 @@ def shutdown_event():
     logger.info("AI Service gracefully shut down.")
 
 
-@app.get("/health")
-def health_check():
-    logger.info("Health check endpoint hit")
-    qdrant_status = "healthy" if qdrant_rag.enabled else "offline"
-
-    redis_status = "healthy"
-    if short_term_memory.redis_client:
-        try:
-            short_term_memory.redis_client.ping()
-        except Exception:
-            redis_status = "offline"
-    else:
-        redis_status = "offline"
-
-    is_all_healthy = qdrant_status == "healthy" and redis_status == "healthy"
-    return {
-        "status": "healthy" if is_all_healthy else "degraded",
-        "service": "ai-service",
-        "version": "1.0.0",
-        "dependencies": {"qdrant": qdrant_status, "redis": redis_status},
-    }
-
-
-@app.get("/health/ready")
-def readiness_check(response: Response):
-    redis_up = False
-    if short_term_memory.redis_client:
-        try:
-            short_term_memory.redis_client.ping()
-            redis_up = True
-        except Exception:
-            redis_up = False
-
-    qdrant_up = qdrant_rag.enabled or False
-
-    if redis_up and qdrant_up:
-        return {"status": "ready"}
-    else:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return {
-            "status": "unready",
-            "dependencies": {
-                "redis": "healthy" if redis_up else "failed",
-                "qdrant": "healthy" if qdrant_up else "failed",
-            },
-        }
+# Health and monitoring is now managed by health_router
 
 
 if __name__ == "__main__":
