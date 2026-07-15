@@ -40,3 +40,37 @@
 - `[x]` Confirm overall project coverage remains stable (Coverage is 86%)
 - `[x]` Commit changes and push to origin main branch (Commit Hash: `2ad9081f9a1ea2b6e147b3db27a20ee4189e3a6a`)
 - `[x]` Generate deliverables `Milestone_4_1_Walkthrough.md` and `Implementation_Report.md`
+
+## Milestone 4.2 Enterprise Vector Retrieval Platform Checklist
+- `[x]` Implement intent classification, spelling normalizer, and decomposition processors
+- `[x]` Implement semantic query cache wrapper and exact key caches
+- `[x]` Implement vector collection workspace manager and re-embedding migrations
+- `[x]` Implement RRF hybrid search rank fusion
+- `[x]` Implement post-fusion Cross-Encoder re-ranking
+- `[x]` Implement confidence level indicators (HIGH/MEDIUM/LOW)
+- `[x]` Implement search fallback pipeline sequence
+- `[x]` Implement explainability metadata mappings and cost tracking logs
+- `[x]` Write unit/integration tests in `test_knowledge_retrieval_platform.py`
+- `[x]` Commit changes and push to origin main branch (Commit Hash: `83e2642`)
+- `[x]` Generate deliverables `Milestone_4_2_Walkthrough.md` and `Implementation_Report.md`
+
+## Milestone 4.3 Enterprise Context Orchestration & Grounded Generation Platform Checklist
+- `[x]` Implement `ConversationContextLayer` turn manager and summarization triggers
+- `[x]` Implement `MemoryFusionEngine` decay weighting and preference fusion
+- `[x]` Implement `ContextConflictResolutionEngine` priority mapping overrides
+- `[x]` Implement `TokenBudgetManager` dynamic allocators
+- `[x]` Implement `ContextCompressionEngine` whitespace and fluff cleaners
+- `[x]` Implement `PromptRegistry` and `PromptBuilder` version template compositions
+- `[x]` Implement `EnterpriseGuardrailsLayer` injection detection filters and PII CC blockers
+- `[x]` Implement `LLMGateway` failovers, timeouts, circuit breakers, and backups
+- `[x]` Implement `StreamingResponseController` async response stream buffers
+- `[x]` Implement `GroundingValidator` claims check validators
+- `[x]` Implement `CitationEngine` bracket indexes citations and references listings
+- `[x]` Implement `ResponseConfidenceEngine` score evaluators
+- `[x]` Implement `ResponsePolicyEngine` cautions and warning appenders
+- `[x]` Implement `ResponsePostProcessor` markdown formatting polisher
+- `[x]` Implement `TraceabilityManager` trace ID and versions trackers
+- `[x]` Write comprehensive tests in `test_knowledge_orchestration_platform.py`
+- `[x]` Run Ruff checks and format, compileall validations, and import checks cleanly
+- `[x]` Commit changes and push to origin main branch (Commit Hash: `f3aee48`)
+- `[x]` Generate deliverables `Milestone_4_3_Walkthrough.md` and `Implementation_Report.md`
