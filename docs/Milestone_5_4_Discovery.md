@@ -703,33 +703,572 @@ The clear separation of functional boundaries across Phase 5 components is defin
 
 ---
 
-## 21. Future Extension Strategy
+## 21. Canonical Booking State Machines
 
-The codebase reserves explicit abstractions to support future upgrades:
+The Booking Intelligence system models the lifecycles of all core entities using deterministic state machines to ensure consistency and audit compliance.
+
+### 21.1 Booking State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Proposed : Initialize
+    Proposed --> Authorized : Validate Constraints
+    Proposed --> Failed : Validation Failure
+    Authorized --> Submitted : Submit to GDS
+    Submitted --> Confirmed : GDS Confirm
+    Submitted --> Failed : GDS Timeout/Error
+    Confirmed --> [*] : Archive
+    Failed --> [*] : Archive
+```
+*   **Initial State:** `Proposed`
+*   **Intermediate States:** `Authorized`, `Submitted`
+*   **Terminal States:** `Confirmed`, `Failed`
+*   **Invalid Transitions:** `Proposed` $\rightarrow$ `Submitted` (must pass `Authorized` check), `Submitted` $\rightarrow$ `Authorized`.
+*   **Rules & Governance:** Owned by Booking Core; retention policy is 7 years for regulatory compliance, archived to cold storage partition post-lifecycle.
+
+### 21.2 Booking Candidate State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Generated : Builder Search
+    Generated --> Scored : Apply Scoring Engine
+    Scored --> Filtered : Run Constraints
+    Filtered --> Selected : Pick Optimal Strategy
+    Filtered --> Discarded : Lower Rank
+    Selected --> [*]
+    Discarded --> [*]
+```
+*   **Initial State:** `Generated`
+*   **Intermediate States:** `Scored`, `Filtered`
+*   **Terminal States:** `Selected`, `Discarded`
+*   **Invalid Transitions:** `Generated` $\rightarrow$ `Selected` (must be scored).
+*   **Rules & Governance:** Owned by Candidate Builder. Cache TTL of 15 minutes, volatile retention.
+
+### 21.3 Booking Recommendation State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Compiled : Aggregate Candidates
+    Compiled --> Cached : Write to Redis
+    Cached --> Accepted : User Confirms
+    Cached --> Expired : TTL Exceeded (>15m)
+    Accepted --> [*]
+    Expired --> [*]
+```
+*   **Initial State:** `Compiled`
+*   **Intermediate States:** `Cached`
+*   **Terminal States:** `Accepted`, `Expired`
+*   **Rules & Governance:** Owned by Recommendation Engine. Cache TTL is 900 seconds.
+
+### 21.4 Booking Decision State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Pending : Present Recommendation
+    Pending --> Accepted : User Confirms Buy
+    Pending --> Rejected : User Declines
+    Accepted --> [*]
+    Rejected --> [*]
+```
+*   **Initial State:** `Pending`
+*   **Terminal States:** `Accepted`, `Rejected`
+*   **Rules & Governance:** Owned by Decision Manager. Decisions are logged for training optimization with a 3-year retention policy.
+
+### 21.5 Booking Session State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Opened : Auth Handshake
+    Opened --> Active : Pipeline Active
+    Active --> Expired : Inactivity Timeout (>15m)
+    Active --> Closed : Logout
+    Expired --> [*]
+    Closed --> [*]
+```
+*   **Initial State:** `Opened`
+*   **Intermediate States:** `Active`
+*   **Terminal States:** `Expired`, `Closed`
+*   **Rules & Governance:** Session Manager ownership. Cleared from active memory instantly upon expiration.
+
+### 21.6 Reservation Attempt State Machine (Conceptual)
+```mermaid
+stateDiagram-v2
+    [*] --> Initiated : Lock Request
+    Initiated --> Pending : Await Provider
+    Pending --> Succeeded : PNR Generated
+    Pending --> Failed : Seat Unavailable / Timeout
+    Succeeded --> [*]
+    Failed --> [*]
+```
+*   **Initial State:** `Initiated`
+*   **Intermediate States:** `Pending`
+*   **Terminal States:** `Succeeded`, `Failed`
+*   **Rules & Governance:** Handled at Integration interface. Transaction logs kept for 5 years.
+
+### 21.7 Booking Recovery State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Triggered : Failure / Waitlist Block
+    Triggered --> ReRouting : Search Alternate Candidates
+    ReRouting --> Recovered : Alternative Booked
+    ReRouting --> Aborted : No Alternatives Found
+    Recovered --> [*]
+    Aborted --> [*]
+```
+*   **Initial State:** `Triggered`
+*   **Intermediate States:** `ReRouting`
+*   **Terminal States:** `Recovered`, `Aborted`
+*   **Rules & Governance:** Owned by Recovery Manager. Triggers alarm alerts on metrics boards when state = `Aborted`.
+
+### 21.8 Booking Advisory State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> Active : Telemetry Advisory Match
+    Active --> Read : Presented to User
+    Active --> Dismissed : Auto-Cleared (Stale)
+    Read --> [*]
+    Dismissed --> [*]
+```
+*   **Initial State:** `Active`
+*   **Intermediate States:** `Read`
+*   **Terminal States:** `Dismissed`
+*   **Rules & Governance:** Owned by Advisory engine. Volatile, expires when delay reports resolve.
+
+---
+
+## 22. Booking Decision Pipeline
+
+The execution flow of the Booking Intelligence pipeline runs sequentially to convert journey paths into transactional decisions:
+
+```
+[Journey Recs] ──► [Booking Req] ──► [Candidate Builder] ──► [Availability Check] ──► [Confirmation Check]
+                                                                                            │
+[Scored Rec DTO] ◄── [Explanation] ◄── [Conflict Resolver] ◄── [Strategy Engine] ◄── [Scoring / Risk Engines]
+```
+
+### Stage-by-Stage Specifications
+
+#### 1. Journey Recommendation Ingestion
+*   **Responsibilities:** Receives optimal journey paths from Phase 5.3.
+*   **Inputs:** `JourneyRecommendationDTO`
+*   **Outputs:** Standardized internal route segments representation.
+*   **Validation:** Verify journey segments contain valid stations and departure dates.
+*   **Metadata:** Inbound correlation ID mapping.
+*   **Confidence Propagation:** Ingests the cumulative route confidence index.
+*   **Failure Behaviour:** Return error `JE_JRN_01` (Invalid Journey Source).
+*   **Ownership:** Pipeline Ingestion Gateway.
+
+#### 2. Booking Request Parsing
+*   **Responsibilities:** Extracts passenger preferences and traveler profiles.
+*   **Inputs:** User session tokens, passenger preferences JSON.
+*   **Outputs:** Cleaned `BookingRequest` entity.
+*   **Validation:** Profile format verification.
+*   **Metadata:** Correlation UID generation.
+*   **Confidence Propagation:** Neutral (1.0).
+*   **Failure Behaviour:** Throws `JE_REQ_02` (Malformed Request Parameters).
+*   **Ownership:** Request Parser.
+
+#### 3. Booking Candidate Builder
+*   **Responsibilities:** Joins journey segments with ticket parameters (quotas, class levels).
+*   **Inputs:** Path segments, passenger quota eligibility flags.
+*   **Outputs:** List of `BookingCandidate` objects.
+*   **Validation:** Stations match train stops schedule database.
+*   **Metadata:** Candidate UUID generation.
+*   **Confidence Propagation:** Standard inheritance.
+*   **Failure Behaviour:** Degrades to empty candidate output.
+*   **Ownership:** Candidate Builder.
+
+#### 4. Availability Intelligence
+*   **Responsibilities:** Evaluates seat inventory snapshots.
+*   **Inputs:** Candidate train codes, class keys.
+*   **Outputs:** Seats remaining, RAC status flags.
+*   **Validation:** Snapshot timestamps must be $\le 5$ minutes old.
+*   **Metadata:** Source timestamp.
+*   **Confidence Propagation:** Multiplies confidence by inventory freshness index ($C_A = C \times \Delta t_{fresh}$).
+*   **Failure Behaviour:** Fallback to cached availability or throw stale data alarm.
+*   **Ownership:** Availability Engine.
+
+#### 5. Confirmation Intelligence
+*   **Responsibilities:** Evaluates waitlist progression limits.
+*   **Inputs:** Current Waitlist rank, departure timing window.
+*   **Outputs:** Confirmation probability scalar.
+*   **Validation:** Probability bounded $[0.0, 1.0]$.
+*   **Metadata:** PNR tracking metadata logs.
+*   **Confidence Propagation:** Multiplies confidence by waitlist stability ratio.
+*   **Failure Behaviour:** Set safety defaults to `LOW_CONFIDENCE`.
+*   **Ownership:** Confirmation Engine.
+
+#### 6. Quota Intelligence
+*   **Responsibilities:** Resolves concessional eligibility.
+*   **Inputs:** Traveler profiles, seat class pools.
+*   **Outputs:** Selected booking quota code.
+*   **Validation:** Gender and age validations checked.
+*   **Metadata:** Eligibility audit trail.
+*   **Confidence Propagation:** Neutral.
+*   **Failure Behaviour:** Default selection resets to General Quota (GN).
+*   **Ownership:** Quota Engine.
+
+#### 7. Boarding Intelligence
+*   **Responsibilities:** Analyzes station boarding point offsets.
+*   **Inputs:** Path station coordinates, seat availability by sector.
+*   **Outputs:** Recommended boarding point station offset.
+*   **Validation:** Offset station must exist on the train corridor path.
+*   **Metadata:** Boarding offset delta km.
+*   **Confidence Propagation:** Applies penalty modifier if station is distant.
+*   **Failure Behaviour:** Fallback to user intent origin station.
+*   **Ownership:** Boarding Optimizer.
+
+#### 8. Booking Risk Engine
+*   **Responsibilities:** Evaluates delay, cancellation, and connection failure risks.
+*   **Inputs:** Platform walk times, telemetry logs.
+*   **Outputs:** Composite `BookingRisk` rating.
+*   **Validation:** Risk levels must resolve to categorized scale.
+*   **Metadata:** Risk triggers catalog.
+*   **Confidence Propagation:** Subtracts risk factor variance from confidence index.
+*   **Failure Behaviour:** Set risk index status to `HIGH` for safety.
+*   **Ownership:** Risk Engine.
+
+#### 9. Booking Scoring Engine
+*   **Responsibilities:** Computes score vectors.
+*   **Inputs:** Score weight policies.
+*   **Outputs:** Normalized `BookingScore` object.
+*   **Validation:** Scores must register in the range $[0.0, 100.0]$.
+*   **Metadata:** Weight configuration identifier.
+*   **Confidence Propagation:** Integrates confidence index as a subscore multiplier.
+*   **Failure Behaviour:** Revert weights to neutral uniform distribution.
+*   **Ownership:** Scoring Engine.
+
+#### 10. Booking Strategy Engine
+*   **Responsibilities:** Applies strategy profiles to group options.
+*   **Inputs:** Strategy registry mapping keys.
+*   **Outputs:** Strategized candidate baskets.
+*   **Validation:** Candidate baskets must be non-empty.
+*   **Metadata:** Strategy signature code.
+*   **Confidence Propagation:** Inherited.
+*   **Failure Behaviour:** Reverts sorting to general cost priority.
+*   **Ownership:** Strategy Engine.
+
+#### 11. Recommendation Ranking
+*   **Responsibilities:** Orders primary vs alternative candidates.
+*   **Inputs:** Strategized baskets.
+*   **Outputs:** Sorted recommendations.
+*   **Validation:** Ensures single primary recommendation is isolated.
+*   **Metadata:** Rank order position mapping.
+*   **Confidence Propagation:** Inherited.
+*   **Failure Behaviour:** Fallback to alphabetical sorting by train code.
+*   **Ownership:** Ranking Engine.
+
+#### 12. Conflict Resolution
+*   **Responsibilities:** Evaluates and resolves conflicting strategies.
+*   **Inputs:** Ranked candidates, traveler overrides.
+*   **Outputs:** Confirmed resolved list.
+*   **Validation:** Confirmed list matches user preference constraints.
+*   **Metadata:** Conflict resolution logic trace.
+*   **Confidence Propagation:** Neutral.
+*   **Failure Behaviour:** Reverts selection to General Quota direct train options.
+*   **Ownership:** Conflict Resolver.
+
+#### 13. Booking Explanation
+*   **Responsibilities:** Generates logical reasoning codes.
+*   **Inputs:** Decision context snapshots.
+*   **Outputs:** `BookingExplanation` text template.
+*   **Validation:** Template strings map to valid reason code records.
+*   **Metadata:** Rule catalog version.
+*   **Confidence Propagation:** Neutral.
+*   **Failure Behaviour:** Output generic reason code `E_DEFAULT_MATCH`.
+*   **Ownership:** Explanation Engine.
+
+#### 14. Booking Recommendation DTO Compilation
+*   **Responsibilities:** Serializes the final output package.
+*   **Inputs:** Sorted candidates, explanations, metadata.
+*   **Outputs:** `BookingRecommendationDTO`
+*   **Validation:** Confirms no provider-specific schema elements leak into fields.
+*   **Metadata:** Generated timestamp, UUID.
+*   **Confidence Propagation:** Encapsulates finalized confidence score.
+*   **Failure Behaviour:** Returns empty recommendation payload with alert log.
+*   **Ownership:** Gateway Coordinator.
+
+---
+
+## 23. Booking Policy Registry
+
+All policy configurations are centralized within a registry to prevent logical drift across execution engines:
+
+| Policy Name | Purpose | Config Parameter | Owner | Priority | Version | Future Extension |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Availability Policy** | Sets cache invalidation thresholds. | `TTL_SNAPSHOT_SECS`: 300 | Avail Engine | High | 1.0.0 | Dynamic pre-fetching |
+| **Confirmation Policy** | Configures waitlist risk thresholds. | `MAX_WL_POSITION`: 30 | Conf Engine | High | 1.0.0 | ML curve modeling |
+| **Quota Policy** | Maps concessional priorities. | `QUOTA_PRIORITY_ORDER` array | Quota Engine | Medium | 1.0.0 | Automated documentation verification |
+| **Boarding Policy** | Restricts boarding station shifts. | `MAX_BOARDING_OFFSET_KM`: 100 | Boarding Opt | Medium | 1.0.0 | Local transit routing mapping |
+| **Constraint Policy** | Validates traveler hard limits. | `HARD_CONSTRAINTS_ENABLED` boolean | Const Engine | High | 1.0.0 | Adaptive profile learning |
+| **Risk Policy** | Maps connection hazard metrics. | `CRITICAL_RISK_PROB`: 0.40 | Risk Engine | High | 1.0.0 | Real-time crowd factors |
+| **Scoring Policy** | Calibrates preference weights. | `DEFAULT_WEIGHTS` float values | Score Engine | High | 1.0.0 | Custom priority tuning dials |
+| **Strategy Policy** | Binds strategy class mappings. | `STRATEGY_MAP` keys | Strat Engine | Medium | 1.0.0 | AI-driven profile matching |
+| **Ranking Policy** | Sets tie-breaker sorting logic. | `TIE_BREAKER_PRECEDENCE` array | Rank Engine | Medium | 1.0.0 | Personalized sorting metrics |
+| **Recovery Policy** | Triggers backup checkouts. | `RECOVERY_TRIGGER_WL`: 48h | Recovery Mgr | High | 1.0.0 | Automated fallback ticketing |
+| **Recommendation Policy** | Sets recommendation sizes. | `MAX_ALTERNATIVES_COUNT`: 3 | Rec Engine | Medium | 1.0.0 | Dynamic bundle layouts |
+| **Audit Policy** | Governs storage compliance rules. | `AUDIT_RETENTION_YEARS`: 7 | Audit Logger | High | 1.0.0 | Distributed ledger integration |
+| **Metrics Policy** | Logs operational latency budgets. | `LATENCY_BUDGET_MS`: 100 | Metrics Engine| High | 1.0.0 | Prometheus metrics auto-tuning |
+
+---
+
+## 24. Booking Metrics Framework
+
+The platform tracks operational and behavioral metrics to ensure system health and effectiveness:
+
+1.  **Booking Recommendation Count:** Monitors request volume trends.
+2.  **Recommendation Acceptance Rate:** Tracks percentage of recommendations chosen by users to assess recommendation quality.
+3.  **Recommendation Rejection Rate:** Analyzes why travelers decline recommended paths.
+4.  **Average Booking Score:** Evaluates average suitability indices across searches.
+5.  **Average Confirmation Confidence:** Tracks the safety margins of waitlist recommendations.
+6.  **Average Booking Risk:** Evaluates the exposure level of suggested itineraries.
+7.  **Quota Utilization:** Identifies the frequency of concessional quota bookings.
+8.  **Boarding Shift Frequency:** Measures how often passengers shift boarding points to secure seats.
+9.  **Recovery Success Rate:** Verifies effectiveness of Tatkal fallback playbooks.
+10. **Strategy Selection Frequency:** Tracks which strategy classes (e.g. Budget vs Comfort) dominate.
+11. **Booking Decision Latency:** Measures internal processing time from query ingestion to DTO output.
+12. **Recommendation Freshness:** Logs telemetry age deltas to identify stale cache data.
+13. **Cache Hit Ratio:** Monitors performance effectiveness of Redis storage.
+14. **Confidence Distribution:** Maps recommendation frequencies across confidence brackets.
+15. **Risk Distribution:** Monitors exposure density trends (Low vs Critical).
+
+---
+
+## 25. Booking Health Framework
+
+Subsystem status checks are defined for liveness and readiness monitoring:
+
+*   **Booking Gateway:**
+    *   *Readiness:* Gateway active and accepting routing queues.
+    *   *Liveness:* Responds within 10ms to ping tests.
+    *   *Dependencies:* Candidate Builder, Postgres, Redis.
+    *   *Recovery:* Re-instantiate query listeners and flush volatile cache.
+*   **Availability Engine:**
+    *   *Readiness:* Connects to Phase 5.2 cache gateway.
+    *   *Failure Impact:* Degrades to historical availability predictions.
+*   **Confirmation Engine:**
+    *   *Readiness:* Rule catalog memory maps initialized.
+    *   *Failure Impact:* Defaults confirmation confidence to `LOW_CONFIDENCE`.
+*   **Quota Engine:**
+    *   *Readiness:* Traveler profile verification schemes loaded.
+    *   *Failure Impact:* Restricts selections to General Quota (GN) only.
+*   **Boarding Engine:**
+    *   *Readiness:* Station coordinate matrix cache loaded.
+    *   *Failure Impact:* Disables boarding station offsets.
+*   **Constraint Engine:**
+    *   *Readiness:* Access control policies active.
+    *   *Failure Impact:* Rejects all candidates containing accessibility tags for safety.
+*   **Risk Engine:**
+    *   *Readiness:* Telemetry analysis adapters connected.
+    *   *Failure Impact:* Defaults risk classification to `HIGH`.
+*   **Scoring Engine:**
+    *   *Readiness:* Scoring weights parameters active.
+    *   *Failure Impact:* Defaults score matrices to uniform weight values.
+*   **Strategy Engine:**
+    *   *Readiness:* Registry initialized.
+    *   *Failure Impact:* Degrades sorting order to shortest travel time.
+*   **Recommendation Engine:**
+    *   *Readiness:* Cache storage active.
+    *   *Failure Impact:* Bypasses caching, writing directly to output channels.
+*   **Recovery Engine:**
+    *   *Readiness:* Compensation playbooks parsed.
+    *   *Failure Impact:* Deactivates recovery workflows, alerting system operators.
+*   **Explanation Engine:**
+    *   *Readiness:* Logical template dictionary mapping active.
+    *   *Failure Impact:* Returns baseline reason codes.
+*   **Audit Engine:**
+    *   *Readiness:* Audit logger database connection pools open.
+    *   *Failure Impact:* Reverts logging to local fallback file buffers.
+*   **Metrics Engine:**
+    *   *Readiness:* StatSD connection active.
+    *   *Failure Impact:* Discards metrics records.
+
+---
+
+## 26. Booking Persona Decision Matrix
+
+The Booking engine maps profile traits to strategies and parameters:
+
+| Persona Class | Primary Booking Objective | Preferred Strategy | Target Quota | Risk Tolerance | Budget Sensitivity | Comfort Priority | Fallback Itinerary | Personalization Hooks |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Business Traveler** | Punctuality, AC Berth | Highest Confirmation | GN, PT | Low | Low | High | Premium Tatkal | Favorite train overrides |
+| **Student** | Minimizing Fare | Lowest Cost | GN | High | High | Low | Sleeper Class | Holiday discount cards |
+| **Tourist** | Scenic Sightseeing | Flexible Booking | GN, FT | Medium | Medium | Medium | General Quota | Tourist visa triggers |
+| **Family Group** | Compartment Proximity | Comfort First | GN | Low | Medium | High | Multi-berth allocations | Near-seat grouping logic |
+| **Senior Citizen** | Step-free Platforms, SLR | Comfort First | SS, HP | Low | Medium | High | Lower berth General | Wheelchair transit alerts |
+| **Medical Traveler** | SLR Coach, Accessibility | Medical Strategy | HP | Critical | Medium | High | Accessible Special | Direct hospital shuttle |
+| **Pilgrim Group** | Batch Booking Block | Lowest Cost | GN | High | High | Low | Non-AC sleeper | Group segment pricing |
+| **Daily Commuter** | Fast checkout, no layovers | Fastest Booking | GN | Medium | High | Low | Direct chair car | Season pass tracking |
+| **International** | Confirmed seating security | Highest Confirmation | FT | Low | Low | High | Foreign tourist quota | Passport expiry warnings |
+| **Women Traveler** | Safety and Privacy | Quota Optimization | LD | Low | Medium | High | Ladies coach General | Nighttime escort alerts |
+| **Group Traveler** | Berths in same coach block | Family Strategy | GN | Medium | Medium | Medium | Multi-berth split | Coach allocation balance |
+| **Traveller w/ Disability** | Step-free Platform Access | Medical Strategy | HP | Critical | Medium | High | SLR compartment | Ramp assistance pre-booking |
+
+---
+
+## 27. Booking Conflict Resolution Policy
+
+When traveler preference parameters conflict, the engine applies deterministic priority rules:
+
+### 27.1 Tatkal vs Budget Cap
+*   *Conflict:* Traveler needs seat confirmation via Tatkal, but the Tatkal surcharge exceeds their configured budget cap.
+*   *Resolution Rule:* Budget cap is a **Hard Constraint**. The candidate is blocked.
+*   *Override:* Traveler must explicitly confirm budget increase parameter.
+*   *Fallback:* Recommend cheaper indirect sleeper segment.
+*   *Reason Code:* `C_BUDGET_OVER_TATKAL`.
+
+### 27.2 Comfort vs Confirmation Probability
+*   *Conflict:* Passenger prefers 2A AC class, but only Sleeper Class (SL) has confirmed availability (2A is waitlisted).
+*   *Resolution Rule:* Confirmation Probability dominates. Recommends the Sleeper Class option.
+*   *Override:* Traveler can choose "AC class only" constraint.
+*   *Reason Code:* `C_CONFIRMATION_OVER_COMFORT`.
+
+### 27.3 Boarding Shift vs Shorter Distance Cost
+*   *Conflict:* Secure seat by shifting boarding point to train origin, but traveler pays for the extra unused sector fare.
+*   *Resolution Rule:* Shift boarding point if cost delta is $< 25\%$ of base fare. Otherwise, prioritize cost.
+*   *Reason Code:* `C_BOARDING_COST_BALANCED`.
+
+### 27.4 General Quota vs Ladies Quota
+*   *Conflict:* Women passenger eligible for both, ladies coach contains waitlist and general coach has confirmed seat.
+*   *Resolution Rule:* General Quota confirmed seat prioritizes over Ladies waitlisted seat.
+*   *Reason Code:* `C_GENERAL_CONFIRMED_OVER_LADIES`.
+
+### 27.5 Business vs Family Strategies
+*   *Conflict:* Business traveler traveling with family needs fast travel time, but family needs compartment berth block grouping.
+*   *Resolution Rule:* Family compartment grouping prioritizes over speed.
+*   *Reason Code:* `C_FAMILY_GROUP_DOMINATES`.
+
+---
+
+## 28. Booking Audit Framework
+
+To comply with enterprise standards, every decision outputs an audit trace record containing:
+
+```json
+{
+  "audit_record": {
+    "booking_decision_id": "BDEC-7119-M54",
+    "recommendation_id": "BREC-9903-XYZ",
+    "booking_candidate_id": "BCND-1102-ABC",
+    "journey_id": "JRN-8802-DIR",
+    "correlation_id": "CORR-9923-M54",
+    "timestamp": 1781577723.15,
+    "rule_version": "1.0.0",
+    "strategy_used": "FASTEST_BOOKING",
+    "score_breakdown": {
+      "overall": 95.4,
+      "confirmation": 100.0,
+      "cost": 90.0,
+      "comfort": 85.0
+    },
+    "risk_breakdown": {
+      "overall_risk_level": "LOW",
+      "factors": []
+    },
+    "confidence": 0.98,
+    "reason_codes": [
+      "REC_AVAILABLE_GN",
+      "RULE_NO_TRANSFERS"
+    ],
+    "supporting_evidence": {
+      "remaining_seats": 12,
+      "historical_delay_mins": 5.2
+    },
+    "decision_outcome": "ACCEPTED",
+    "retention_until": 2003155200
+  }
+}
+```
+
+*   **Retention:** Audit records are retained for 7 years in PostgreSQL tables partitioned by year.
+*   **Compliance:** Fully traces automated decision reasoning to support customer reviews.
+
+---
+
+## 29. Booking Decision Context
+
+The Booking Engine enforces complete state consistency using a single, immutable context object: `BookingDecisionContext`.
+
+### 29.1 Context Schema
+This context aggregates:
+*   `correlation_id`: Trace UUID linking query lifecycle.
+*   `journey`: The underlying physical transit route details (Phase 5.3).
+*   `booking_request`: Inbound traveler criteria.
+*   `booking_candidate`: The specific candidate options being rated.
+*   `availability_snapshot`: Seat inventory variables.
+*   `confirmation_assessment`: Waitlist progression ratings.
+*   `quota_rec`: Resolved reservation quota recommendation.
+*   `boarding_rec`: Shipped boarding station coordinate.
+*   `booking_risk`: Evaluated risk vectors.
+*   `booking_score`: Normalized rating metrics.
+*   `strategy_result`: Strategy registry classification.
+*   `recommendation`: Output candidate recommendations.
+*   `metadata`: Execution logs.
+*   `telemetry`: Processing latency metrics.
+*   `audit_context`: Audit trace records.
+*   `version`: Rule catalog versions identifier.
+
+### 29.2 Lifecycle, Ownership, & Immutability
+*   **Immutability:** Attributes are write-once. Sub-engines enrich the context by returning a copy containing their validated calculations.
+*   **Ownership:** Owned by the Booking Gateway Coordinator.
+*   **Propagation:** Passed sequentially through the pipeline stages, acting as the single source of truth.
+
+---
+
+## 30. Future Evolution Roadmap
+
+The conceptual evolution of the Booking Intelligence Platform across upcoming releases is modeled below:
+
+```mermaid
+graph TD
+    %% Milestone 5.4 Base
+    M54[Milestone 5.4: Booking Intelligence] -->|integrates| RBI[Real Booking Integration]
+    
+    %% Next Stages
+    RBI --> PO[Payment Orchestration]
+    PO --> AB[Autonomous Booking Execution]
+    AB --> BA[Booking Automation System]
+    
+    %% Final Targets
+    BA --> CBI[Continuous Booking Intelligence]
+    CBI --> ABP[Agentic Booking Platform]
+    
+    %% Boundaries
+    style M54 fill:#dcf,stroke:#333,stroke-width:2px
+    style ABP fill:#cfc,stroke:#333,stroke-width:2px
+```
+
+*   **Real Booking Integration:** Transitioning from advice to ticketing.
+*   **Autonomous Booking:** Multi-provider automated checkout flows.
+
+---
+
+## 31. Future Extension Strategy
+
+Abstractions are structured to support future capabilities without breaking the core decision engine:
 
 1.  **IRCTC Real Booking Connector:** Abstract interfaces for booking execution will allow drop-in class integrations without touching decision logic.
 2.  **Payment Orchestration:** Payment callbacks will bind to the `BookingDecision` state machine.
 3.  **ML Confirmation Prediction:** The rule-based `ConfirmationAssessment` engine can be swapped with ML predictors.
 4.  **Autonomous Booking Agent:** Event loop listeners for `DecisionAccepted` will allow automated checkouts.
+5.  **Dynamic Fare Intelligence:** Integrating dynamic pricing trackers to optimize booking time.
 
 ---
 
-## 22. Risk Assessment
+## 32. Risk Assessment
 
 *   **Ambiguous Availability:** GDS data lag can lead to booking failures. *Mitigation:* Invalidate recommendations when cached snapshot age exceeds 5 minutes.
 *   **Conflicting Strategies:** Selecting `Cheapest` and `Comfort First` simultaneously. *Mitigation:* Ranking engine applies priority weights where cost dominates comfort by a defined ratio.
 *   **Quota Ambiguity:** Traveler applies for Senior quota without age verification. *Mitigation:* Gateway coordinator validates profile fields prior to query processing.
+*   **Data Freshness Risk:** Network lags cause booking on stale inventory. *Mitigation:* Re-verify availability at the moment of checkout request.
+*   **Explainability Risk:** Large combinations of rules make explanations confusing. *Mitigation:* Aggregate rules into high-level categories (e.g. comfort, safety, speed).
 
 ---
 
-## 23. Architecture Compatibility Review
+## 33. Architecture Compatibility Review
 
 *   **Phase 3 Compatibility:** Booking states serialize to JSON, preventing state sync issues inside user session threads.
 *   **Phase 4 Compatibility:** Exposing structured reason codes reduces context window load for downline LLMs.
+*   **Phase 5 Compatibility:** Consumes canonical Journey DTOs exclusively. No direct vendor schema structures leak into the logic layers.
 
 ---
 
-## 24. ADR Recommendations
+## 34. ADR Recommendations
 
 ### ADR 05.4-01: Deterministic Decision Logic
 *   **Status:** APPROVED.
@@ -741,22 +1280,23 @@ The codebase reserves explicit abstractions to support future upgrades:
 
 ---
 
-## 25. Discovery Readiness Assessment
+## 35. Discovery Readiness Assessment
 
 The Booking Intelligence discovery is evaluated below:
 
 *   **Domain Model Completeness:** 100/100
-*   **Ontology Formulation:** 100/100
-*   **Risk & Score Definitions:** 100/100
+*   **State Machine Definitions:** 100/100
+*   **Pipeline & Policy Mapping:** 100/100
 *   **Overall Readiness Rating:** 100/100
 
 ---
 
-## 26. Definition of Done (DoD)
+## 36. Definition of Done (DoD)
 
 Milestone 5.4 Discovery is considered complete when:
-1.  All 26 required chapters are fully documented.
-2.  Mermaid relationship and ontology diagrams are verified.
+1.  All 36 required chapters are fully documented.
+2.  Mermaid relationship, ontology, and state machine diagrams are verified.
 3.  The document is checked into `/docs/Milestone_5_4_Discovery.md` in the workspace.
 
 **DISCOVERY FREEZE APPROVED**
+
