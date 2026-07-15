@@ -13,7 +13,7 @@ from app.booking.dto.models import (
     BookingRecommendationDTO,
     ExplanationDTO,
     AuditDTO,
-    MetricsDTO
+    MetricsDTO,
 )
 from app.booking.interfaces.contracts import (
     IBookingGateway,
@@ -36,13 +36,13 @@ from app.booking.interfaces.contracts import (
     IMetricsEngine,
     IHealthEngine,
     ICacheManager,
-    IEventPublisher
+    IEventPublisher,
 )
 from app.booking.gateway.coordinator import (
     BookingDecisionContext,
     BookingDecisionContextFactory,
     BookingCoordinator,
-    BookingIntelligenceGateway
+    BookingIntelligenceGateway,
 )
 from app.booking.candidate.builder import BookingCandidateBuilder
 from app.booking.availability.engine import AvailabilityEngine

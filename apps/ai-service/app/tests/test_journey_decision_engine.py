@@ -42,7 +42,7 @@ class TestJourneyDecisionEngine(unittest.TestCase):
             explanation_engine=self.explanation_engine,
             audit_engine=self.audit_engine,
             metrics_engine=self.metrics_engine,
-            event_publisher=self.event_publisher
+            event_publisher=self.event_publisher,
         )
 
     def test_invariants_origin_destination(self):
@@ -52,7 +52,7 @@ class TestJourneyDecisionEngine(unittest.TestCase):
             earliest_departure=datetime.now(),
             latest_arrival=datetime.now() + timedelta(hours=10),
             traveler_profile={},
-            preference_weights={}
+            preference_weights={},
         )
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -107,7 +107,12 @@ class TestJourneyDecisionEngine(unittest.TestCase):
             earliest_departure=datetime.now(),
             latest_arrival=datetime.now() + timedelta(hours=15),
             traveler_profile={"is_senior": True, "max_budget": 2000.0},
-            preference_weights={"reliability": 0.40, "comfort": 0.20, "cost": 0.20, "duration": 0.20}
+            preference_weights={
+                "reliability": 0.40,
+                "comfort": 0.20,
+                "cost": 0.20,
+                "duration": 0.20,
+            },
         )
 
         recommendation = loop.run_until_complete(
@@ -116,15 +121,17 @@ class TestJourneyDecisionEngine(unittest.TestCase):
         self.assertIsNotNone(recommendation.primary_candidate)
         self.assertNotEqual(recommendation.recommendation_id, "")
         self.assertEqual(recommendation.correlation_id, "tr-102")
-        
+
         # Verify scores are bounded [0, 100]
         primary = recommendation.primary_candidate
         self.assertTrue(0.0 <= primary.score.overall_score <= 100.0)
         self.assertTrue(0.0 <= primary.score.reliability_subscore <= 100.0)
-        
+
         # Verify risk output is present
-        self.assertIn(primary.risk.overall_risk_level, ("LOW", "MEDIUM", "HIGH", "CRITICAL"))
-        
+        self.assertIn(
+            primary.risk.overall_risk_level, ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+        )
+
         # Verify explanation reason codes exist
         self.assertTrue(len(primary.explanation.reason_codes) > 0)
         loop.close()

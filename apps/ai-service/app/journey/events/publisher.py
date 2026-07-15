@@ -14,11 +14,11 @@ class JourneyEventPublisher(IEventPublisher):
         self, event_type: str, payload: Dict[str, Any]
     ) -> None:
         logger.info(f"PUBLISHING_DOMAIN_EVENT type={event_type} payload={payload}")
-        
+
         # Publish event downstream if message broker is connected
         if self.message_broker:
             await self.message_broker.publish(event_type, payload)
-        
+
         # System event loop propagation hook
         # Emit event updates asynchronously
         pass

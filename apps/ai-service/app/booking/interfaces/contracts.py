@@ -12,7 +12,7 @@ from app.booking.dto.models import (
     RiskDTO,
     ScoreDTO,
     ExplanationDTO,
-    AuditDTO
+    AuditDTO,
 )
 
 
@@ -30,9 +30,7 @@ class IBookingGateway(ABC):
 
 class IBookingCoordinator(ABC):
     @abstractmethod
-    async def coordinate_decision(
-        self, context: Any
-    ) -> BookingRecommendationDTO:
+    async def coordinate_decision(self, context: Any) -> BookingRecommendationDTO:
         """
         Runs the sequential processing pipeline stages.
         """
@@ -63,9 +61,7 @@ class IAvailabilityEngine(ABC):
 
 class IConfirmationEngine(ABC):
     @abstractmethod
-    def evaluate_confirmation(
-        self, availability: AvailabilityDTO
-    ) -> ConfirmationDTO:
+    def evaluate_confirmation(self, availability: AvailabilityDTO) -> ConfirmationDTO:
         """
         Calculates waitlist progression reliability.
         """
@@ -74,9 +70,7 @@ class IConfirmationEngine(ABC):
 
 class IQuotaEngine(ABC):
     @abstractmethod
-    def resolve_quotas(
-        self, profile: Dict[str, Any], seat_pools: Any
-    ) -> QuotaDTO:
+    def resolve_quotas(self, profile: Dict[str, Any], seat_pools: Any) -> QuotaDTO:
         """
         Determines concessional class eligibility.
         """
@@ -112,7 +106,7 @@ class IRiskEngine(ABC):
         candidate: BookingCandidateDTO,
         availability: AvailabilityDTO,
         confirmation: ConfirmationDTO,
-        boarding: BoardingDTO
+        boarding: BoardingDTO,
     ) -> RiskDTO:
         """
         Aggregates connections, waitlists, and boarding risks.
@@ -128,7 +122,7 @@ class IScoringEngine(ABC):
         availability: AvailabilityDTO,
         confirmation: ConfirmationDTO,
         risk: RiskDTO,
-        weights: Dict[str, float]
+        weights: Dict[str, float],
     ) -> ScoreDTO:
         """
         Computes composite suitability scoring metric.
@@ -143,9 +137,7 @@ class IStrategy(ABC):
         pass
 
     @abstractmethod
-    def evaluate(
-        self, candidates: List[Any]
-    ) -> List[Any]:
+    def evaluate(self, candidates: List[Any]) -> List[Any]:
         """
         Applies strategy filter sorts.
         """
@@ -155,9 +147,7 @@ class IStrategy(ABC):
 class IRankingEngine(ABC):
     @abstractmethod
     def rank_candidates(
-        self,
-        scored_candidates: List[Any],
-        weights: Dict[str, float]
+        self, scored_candidates: List[Any], weights: Dict[str, float]
     ) -> List[Any]:
         """
         Applies tie-breaker sort configurations.
@@ -205,7 +195,7 @@ class IExplanationEngine(ABC):
         candidate: BookingCandidateDTO,
         score: ScoreDTO,
         risk: RiskDTO,
-        profile: Dict[str, Any]
+        profile: Dict[str, Any],
     ) -> ExplanationDTO:
         """
         Generates logic trace reason summaries.
@@ -215,9 +205,7 @@ class IExplanationEngine(ABC):
 
 class IAuditEngine(ABC):
     @abstractmethod
-    async def log_decision(
-        self, audit: AuditDTO
-    ) -> None:
+    async def log_decision(self, audit: AuditDTO) -> None:
         """
         Dispatches async logs metrics.
         """
@@ -250,15 +238,15 @@ class ICacheManager(ABC):
         pass
 
     @abstractmethod
-    async def cache_recommendation(self, key: str, data: Dict[str, Any], ttl: int) -> None:
+    async def cache_recommendation(
+        self, key: str, data: Dict[str, Any], ttl: int
+    ) -> None:
         pass
 
 
 class IEventPublisher(ABC):
     @abstractmethod
-    async def publish_event(
-        self, name: str, payload: Dict[str, Any]
-    ) -> None:
+    async def publish_event(self, name: str, payload: Dict[str, Any]) -> None:
         """
         Dispatches domain event hashes.
         """

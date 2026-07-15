@@ -1,7 +1,13 @@
 # app/booking/scoring/engine.py
 from typing import Dict
 from app.booking.interfaces.contracts import IScoringEngine
-from app.booking.dto.models import BookingCandidateDTO, AvailabilityDTO, ConfirmationDTO, RiskDTO, ScoreDTO
+from app.booking.dto.models import (
+    BookingCandidateDTO,
+    AvailabilityDTO,
+    ConfirmationDTO,
+    RiskDTO,
+    ScoreDTO,
+)
 from app.booking.config.registry import get_policy
 
 
@@ -12,11 +18,13 @@ class ScoringEngine(IScoringEngine):
         availability: AvailabilityDTO,
         confirmation: ConfirmationDTO,
         risk: RiskDTO,
-        weights: Dict[str, float]
+        weights: Dict[str, float],
     ) -> ScoreDTO:
         # Get defaults weights
         policy_weights = get_policy("Scoring").get("default_weights", {})
-        w_confirm = weights.get("confirmation", policy_weights.get("confirmation", 0.40))
+        w_confirm = weights.get(
+            "confirmation", policy_weights.get("confirmation", 0.40)
+        )
         w_cost = weights.get("cost", policy_weights.get("cost", 0.30))
         w_comfort = weights.get("comfort", policy_weights.get("comfort", 0.20))
         w_time = weights.get("time", policy_weights.get("time", 0.10))
@@ -44,10 +52,10 @@ class ScoringEngine(IScoringEngine):
 
         # Aggregate weighted score
         overall = (
-            (s_confirm * w_confirm) +
-            (s_cost * w_cost) +
-            (s_comfort * w_comfort) +
-            (s_time * w_time)
+            (s_confirm * w_confirm)
+            + (s_cost * w_cost)
+            + (s_comfort * w_comfort)
+            + (s_time * w_time)
         )
         overall = min(100.0, max(0.0, overall))
 
@@ -57,5 +65,5 @@ class ScoringEngine(IScoringEngine):
             cost_subscore=round(s_cost, 2),
             comfort_subscore=round(s_comfort, 2),
             duration_subscore=round(s_time, 2),
-            accessibility_subscore=round(s_access, 2)
+            accessibility_subscore=round(s_access, 2),
         )

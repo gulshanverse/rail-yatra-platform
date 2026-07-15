@@ -1,7 +1,12 @@
 # app/journey/explanation/engine.py
 from typing import Dict, Any
 from app.journey.interfaces.contracts import IExplanationEngine
-from app.journey.dto.models import JourneyCandidateDTO, JourneyScoreDTO, JourneyRiskDTO, JourneyExplanationDTO
+from app.journey.dto.models import (
+    JourneyCandidateDTO,
+    JourneyScoreDTO,
+    JourneyRiskDTO,
+    JourneyExplanationDTO,
+)
 
 
 class ExplanationEngine(IExplanationEngine):
@@ -10,7 +15,7 @@ class ExplanationEngine(IExplanationEngine):
         candidate: JourneyCandidateDTO,
         score: JourneyScoreDTO,
         risk: JourneyRiskDTO,
-        traveler_profile: Dict[str, Any]
+        traveler_profile: Dict[str, Any],
     ) -> JourneyExplanationDTO:
         reason_codes = []
         evaluated_rules = []
@@ -72,14 +77,14 @@ class ExplanationEngine(IExplanationEngine):
                 "reliability": score.reliability_subscore,
                 "comfort": score.comfort_subscore,
                 "cost": score.cost_subscore,
-                "duration": score.duration_subscore
+                "duration": score.duration_subscore,
             },
             risk_breakdown={
                 "missed_connection_probability": risk.missed_connection_probability,
                 "delay_risk": risk.delay_risk_score,
                 "weather_risk": risk.weather_risk_score,
-                "safety_risk": risk.safety_risk_score
+                "safety_risk": risk.safety_risk_score,
             },
             evaluated_rules=evaluated_rules,
-            ai_prompt_context=ai_context
+            ai_prompt_context=ai_context,
         )

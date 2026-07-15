@@ -400,26 +400,205 @@ Batch 5: Compliance, Telemetry & Integration
 
 ---
 
-## 19. Readiness Dashboard
+## 19. Traveler Strategy Registry
 
-| Subsystem Component | Design Status | Dependencies | Interfaces | Repositories | DTOs | Configuration | Caching | Testing | Complexity | Risk | Batch | Ready Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gateway** | Frozen | Gateway DTO | `ITravelerGateway` | Traveler | Request | Validated | Redis | Planned | Medium | Low | 1 | ✅ Ready |
-| **Coordinator** | Frozen | Sub-engines | `ITravelerCoordinator`| None | Context | Validated | None | Planned | High | Medium| 1 | ✅ Ready |
-| **Event Engine** | Frozen | Event parser | `IEventEngine` | None | Event DTO | Validated | None | Planned | Medium | Low | 2 | ✅ Ready |
-| **Timeline** | Frozen | Checkpoint | `ITimelineEngine` | Timeline | Timeline | Validated | Redis | Planned | High | Medium| 2 | ✅ Ready |
-| **Checkpoint** | Frozen | Coordinates | `ICheckpointEngine` | Checkpoint | Checkpoint| Validated | None | Planned | Medium | Low | 2 | ✅ Ready |
-| **Alert Engine** | Frozen | Deduplicator | `IAlertEngine` | Alert | Alert DTO | Validated | Redis | Planned | Medium | Medium| 3 | ✅ Ready |
-| **Reminder** | Frozen | Alarms list | `IReminderEngine` | Reminder | Reminder | Validated | None | Planned | Low | Low | 3 | ✅ Ready |
-| **Recovery** | Frozen | Alternates | `IRecoveryEngine` | Recovery | Recovery | Validated | None | Planned | High | High | 4 | ✅ Ready |
-| **Guidance** | Frozen | Trace compile | `IGuidanceEngine` | Guidance | Guidance | Validated | Redis | Planned | Medium | Low | 4 | ✅ Ready |
-| **Explanation** | Frozen | Reason codes | `IExplanationEngine` | None | Explain | Validated | Redis | Planned | Medium | Low | 4 | ✅ Ready |
-| **Audit** | Frozen | Logger pool | `IAuditEngine` | Audit | Audit DTO | Validated | None | Planned | Low | Low | 5 | ✅ Ready |
-| **Metrics** | Frozen | Telemetry cls | `IMetricsEngine` | Metrics | Metrics | Validated | None | Planned | Low | Low | 5 | ✅ Ready |
+The `TravelerStrategyRegistry` manages configuration-driven strategy selection for travel advisories:
+
+```python
+class TravelerStrategyRegistry:
+    def __init__(self):
+        self._strategies = {}
+
+    def register(self, key: str, strategy: ITravelerStrategy) -> None:
+        self._strategies[key] = strategy
+
+    def get(self, key: str) -> ITravelerStrategy:
+        return self._strategies.get(key)
+```
+
+*   **Strategies Supported:**
+    *   `SafetyFirstStrategy`: Wide buffers, platform checks focus.
+    *   `BusinessTravelerStrategy`: Express recovery, Wi-Fi connections, meeting targets.
+    *   `FamilyTravelerStrategy`: compartment grouping, lower layover stress.
+    *   `MedicalTravelerStrategy`: Step-free accessibility, medical cabinet queries.
+    *   `TouristStrategy`: Detailed walk navigations, station guides.
+    *   `MinimalWalkingStrategy`: avoid overhead bridges, same-platform transfers.
+    *   `FastRecoveryStrategy`: Tatkal backup options focus.
+    *   `BudgetProtectionStrategy`: Filters out dynamic pricing offsets.
+    *   `AccessibilityStrategy`: Enforces SLR layout and wheelchair spaces.
+    *   `LowStressStrategy`: Bypasses last-minute sprint transfers.
 
 ---
 
-## 20. Operational Runbook
+## 20. Policy Resolver Registry
+
+The `PolicyResolver` acts as the single unified interface for retrieving operational governance rules:
+
+*   **Policies Managed:** Alert Policy, Reminder Policy, Timeline Policy, Priority Policy, Suppression Policy, Escalation Policy, Recovery Policy, Guidance Policy, Explanation Policy, Audit Policy, Metrics Policy, and Health Policy.
+*   **Ownership:** Governance / Configuration module.
+*   **Conflict Resolution:** Strict hierarchical prioritization where Safety and Recovery policies always override user notification suppression preferences.
+
+---
+
+## 21. Scenario Registry
+
+The `ScenarioRegistry` dynamically maps operational triggers to concrete action sequences:
+
+*   **Scenarios Managed:** `PlatformChangedScenario`, `LateArrivalScenario`, `TrainCancelledScenario`, `TransferMissedScenario`, `MedicalEmergencyScenario`, `WheelchairTravelerScenario`, `TouristNavigationScenario`, and `FamilyTravelerScenario`.
+*   **Activation Lifecycle:** `Triggered` $\rightarrow$ `Evaluating` $\rightarrow$ `Active` $\rightarrow$ `Suppressed` $\rightarrow$ `Resolved`.
+
+---
+
+## 22. Traveler Event Lifecycle
+
+The traveler assistance pipeline operates sequentially through 12 stages:
+
+| Event Name | Trigger Source | Publisher | Consumers | Payload Schema | Retention |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **TravelerEventDetected** | Telemetry Feed | Gateway | Context Engine | `event_id`, `gps`, `speed` | 24 hours |
+| **TravelerContextUpdated**| Context Factory| Context Factory | Timeline Engine| `context_id`, `traveler_id`| 24 hours |
+| **TimelineUpdated** | Checkpoint check| Timeline Engine| Checkpoint Eng | `timeline_id`, `drift_minutes`| 30 days |
+| **CheckpointUpdated** | Coordinate match| Checkpoint Eng | Alert Engine | `checkpoint_id`, `status` | 24 hours |
+| **AlertGenerated** | Delay/Swap event| Alert Engine | Reminder Engine| `alert_id`, `priority_lane` | 30 days |
+| **ReminderGenerated** | Clock delta trigger| Reminder Eng | Action Engine | `reminder_id`, `fire_time` | 24 hours |
+| **ActionSelected** | Scenarios registry| Action Engine | Recovery Engine| `action_id`, `action_code` | 7 years (Audit) |
+| **RecoveryGenerated** | Connection missed| Recovery Engine| Guidance Engine| `recovery_id`, `plans` | 30 days |
+| **TravelerGuidanceGenerated**| Guidance Eng | Guidance Eng | Gateway | `guidance_id`, `action_dto` | 7 years (Audit) |
+| **TravelerAcknowledged** | User client click| Decision Logger| Audit Engine | `decision_id`, `user_choice`| 7 years (Audit) |
+| **TravelerCompleted** | Destination check| State Tracker | Audit Engine | `session_id`, `duration_sec`| 7 years (Audit) |
+
+---
+
+## 23. Cache Dependency Matrix
+
+To ensure consistency, the Redis caching layers follow rigid guidelines:
+
+| Cache Partition | Producer | Consumer | TTL (sec) | Refresh Strategy | Invalidation Trigger | Fallback Behavior |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Timeline Cache** | Timeline Eng | Checkpoint Eng | 1800 | On checkpoint match | Delay delta $>10\text{m}$ | Read static schedules |
+| **Traveler Context Cache**| Context Fac | All Engines | 3600 | Local cache read | Profile update webhook| Read database fallback |
+| **Alert Cache** | Alert Engine | Gateway | 300 | Automatic write | Expiry of timer | Bypass duplicate checks|
+| **Reminder Cache** | Reminder Eng | Coordinator | 3600 | Timeline rebuild | Checkpoint drift | Scheduled clock fire |
+| **Recovery Cache** | Recovery Eng | Action Engine | 1800 | Recovery recalculation| User choice event | Re-run search loops |
+| **Guidance Cache** | Guidance Eng | AI Runtime | 300 | Immediate set | Timeout event | Regenerate Guidance |
+| **Explanation Cache** | Explainer Eng | Guidance Eng | 86400 | Webhook reload | Config change trigger | Revert to reason codes |
+| **Policy Cache** | Policy Engine| Resolver | 86400 | Webhook reload | Config change trigger | Read static YAML maps |
+| **Configuration Cache**| Config Manager| Policy Resolver| 86400 | Webhook reload | Env modification | Read environment vars |
+
+---
+
+## 24. Configuration Hierarchy
+
+System properties inherit overrides systematically:
+
+```
+Global Level (Base System configs)
+    └─► Traveler Level (Language and DND configurations)
+          └─► Timeline Level (Geofence timers adjustments)
+                └─► Scenario Level (Scenario mapping weights)
+                      └─► Recovery Level (Alternate search limits)
+                            └─► Alerts Level (Deduplication thresholds)
+                                  └─► Reminders Level (Alarms timers offsets)
+                                        └─► Explanation Level (Translation codes templates)
+                                              └─► Metrics Level (Telemetry buffer limits)
+                                                    └─► Audit Level (Partition write-out rules)
+```
+
+---
+
+## 25. Benchmark Methodology Standard
+
+All future milestone implementation reports must document test metrics under the following standardized format:
+
+*   **Test Environment:** Specify Kubernetes cluster, Docker build tag, and system configuration.
+*   **Hardware Profile:** CPU count, RAM capacity, SSD read speed, and network link bandwidth.
+*   **Dataset Size:** Total record count of simulated journeys and passenger profiles.
+*   **Warm/Cold Execution:** Latency averages for initial execution run vs. caching-warmed queries.
+*   **Sample Count:** Minimum of $10,000$ mock requests for statistical relevance.
+*   **Percentiles (p50, p95, p99):** Latency budgets verified at target processing tiers.
+*   **Throughput:** Total completed pipeline execution loops per second.
+
+---
+
+## 26. Documentation Standards
+
+Future deliverables must adhere to these rigid structures:
+
+### 26.1 Walkthrough Standards
+Every walkthrough document must include:
+*   **Architecture Verification:** Import validation tests results.
+*   **Module Interaction Summary:** Interactive maps detailing components.
+*   **Repository-relative paths:** Absolute clickable file links using `file:///` format.
+*   **Known Limitations & Out-of-Scope:** Explicit bounds declaration.
+*   **Performance & Coverage Summaries:** Verification reports.
+
+### 26.2 Implementation Report Standards
+Every implementation report must include:
+*   **Benchmark Methodology:** Output metrics tables.
+*   **Coverage Breakdown:** Statement, branch, and function coverage percentages.
+*   **CI/CD Workflow Status:** Clickable run IDs and commit hashes.
+
+---
+
+## 27. CI Quality Matrix
+
+The quality gates are checked automatically at pull request staging:
+
+| Check Gate | Verification Tool | Purpose | Required Status |
+| :--- | :--- | :--- | :--- |
+| **Code Linter** | Ruff | Enforces style guidelines and unused imports checks. | Zero errors |
+| **Static Analyzer** | MyPy | Verifies strict type-hint safety. | Zero warnings |
+| **Unit Tests** | PyTest | Verifies isolated logic models. | $100\%$ pass, $\ge 90\%$ cov |
+| **Integration Tests** | PyTest | Verifies pipeline coordination loops. | $100\%$ pass |
+| **Scenario Tests** | PyTest | Simulates mock train cancellations. | $100\%$ pass |
+| **Boundary Tests** | Custom AST Check| Verifies zero GDS adapters cross imports. | Zero violations |
+| **Performance Gate** | Locust / PyTest | Enforces latency cap under load test. | $\le 100\text{ms}$ at $p99$ |
+| **CI Build Status** | GitHub Actions | Builds project container images. | All workflows GREEN |
+
+---
+
+## 28. Expanded Implementation Dashboard
+
+The development state of Milestone 5.5 components is mapped using the implementation lifecycle:
+
+| Component / Subsystem | Design Status | Interfaces | Repositories | Caching | Testing | Batch | Lifecycle Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Gateway** | Frozen | `ITravelerGateway` | Traveler | Redis | Planned | 1 | Not Started |
+| **Coordinator** | Frozen | `ITravelerCoordinator`| None | None | Planned | 1 | Not Started |
+| **Context Factory** | Frozen | `IDecisionContext` | None | None | Planned | 1 | Not Started |
+| **Event Engine** | Frozen | `IEventEngine` | None | None | Planned | 2 | Not Started |
+| **Timeline Engine** | Frozen | `ITimelineEngine` | Timeline | Redis | Planned | 2 | Not Started |
+| **Checkpoint Engine** | Frozen | `ICheckpointEngine` | Checkpoint | None | Planned | 2 | Not Started |
+| **Alert Engine** | Frozen | `IAlertEngine` | Alert | Redis | Planned | 3 | Not Started |
+| **Reminder Engine** | Frozen | `IReminderEngine` | Reminder | None | Planned | 3 | Not Started |
+| **Priority Engine** | Frozen | `IPriorityEngine` | None | None | Planned | 3 | Not Started |
+| **Suppression Engine**| Frozen | `ISuppressionEngine`| None | None | Planned | 3 | Not Started |
+| **Recovery Engine** | Frozen | `IRecoveryEngine` | Recovery | None | Planned | 4 | Not Started |
+| **Guidance Engine** | Frozen | `IGuidanceEngine` | Guidance | Redis | Planned | 4 | Not Started |
+| **Explanation Engine**| Frozen | `IExplanationEngine`| None | Redis | Planned | 4 | Not Started |
+| **Confidence Engine** | Frozen | `IConfidenceEngine` | None | None | Planned | 4 | Not Started |
+| **Audit Engine** | Frozen | `IAuditEngine` | Audit | None | Planned | 5 | Not Started |
+| **Metrics Engine** | Frozen | `IMetricsEngine` | Metrics | None | Planned | 5 | Not Started |
+| **Health Engine** | Frozen | `IHealthEngine` | None | None | Planned | 5 | Not Started |
+
+---
+
+## 29. Traveler Guidance Priority Matrix
+
+Guidance priority determines screen interruption rules:
+
+| Priority Class | Urgent Interrupt | Example Scenario Trigger | Delivery Escalation Target | Suppression Allowance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Emergency** | Immediate Sound | Train Cancellation | Push $\rightarrow$ SMS (1m duration) | Never Suppress |
+| **Critical** | Prompt Banner | Platform Swap / Missed Transfer| Push $\rightarrow$ SMS (3m duration) | Never Suppress |
+| **High** | Visible Alert | Connection Risk $> 40\%$ | Push only | Suppress on User Request|
+| **Medium** | Badge Update | Delay Update $> 15$ mins | App Badge | Suppress during Sleep |
+| **Low** | Timeline Log | Tatkal Booking reminder | Silent Log | Suppress during Sleep |
+| **Silent** | None | Telemetry sync update | Local DB only | Suppressed always |
+
+---
+
+## 30. Operational Runbook
 
 If a critical engine fails during execution:
 
@@ -430,7 +609,7 @@ If a critical engine fails during execution:
 
 ---
 
-## 21. Quality Gates
+## 31. Quality Gates
 
 1.  **No GDS Leaks:** Automated import validations confirm no GDS integration adapters exist in the traveler package.
 2.  **Lint:** Running `ruff check .` returns zero warnings.
@@ -439,7 +618,7 @@ If a critical engine fails during execution:
 
 ---
 
-## 22. Architecture Consistency Review
+## 32. Architecture Consistency Review
 
 *   ✓ Discovery represented: traveler timelines, alert deduplications, and recovery paths are fully mapped.
 *   ✓ Architecture Freeze v1.0 preserved: Zero provider integration APIs exist inside code layout configurations.
@@ -447,7 +626,7 @@ If a critical engine fails during execution:
 
 ---
 
-## 23. Planning Readiness Assessment
+## 33. Planning Readiness Assessment
 
 *   **Package Layout Completeness:** 100/100
 *   **Interface Contracts Specifications:** 100/100
@@ -456,11 +635,12 @@ If a critical engine fails during execution:
 
 ---
 
-## 24. Definition of Done (DoD)
+## 34. Definition of Done (DoD)
 
 Milestone 5.5 Planning is complete when:
-1.  All 24 technical planning chapters are fully documented.
+1.  All 34 technical planning chapters are fully documented.
 2.  Interfaces, DTOs, and Repository Matrices are mapped.
 3.  The plan is saved in the workspace under `/docs/Milestone_5_5_Planning.md`.
 
-**PLANNING FREEZE PENDING IMPLEMENTATION REVIEW**
+**PLANNING FREEZE APPROVED**
+

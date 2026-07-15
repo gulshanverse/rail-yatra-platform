@@ -9,9 +9,7 @@ from app.journey.config.registry import is_feature_enabled
 
 class RankingEngine(IRankingEngine):
     def rank_recommendations(
-        self,
-        scored_candidates: List[RecommendedJourneyDTO],
-        weights: Dict[str, float]
+        self, scored_candidates: List[RecommendedJourneyDTO], weights: Dict[str, float]
     ) -> JourneyRecommendationDTO:
         if not scored_candidates:
             return JourneyRecommendationDTO(
@@ -20,7 +18,7 @@ class RankingEngine(IRankingEngine):
                 alternative_candidates=[],
                 generated_at=time.time(),
                 decision_version="1.0.0",
-                correlation_id="corr-default"
+                correlation_id="corr-default",
             )
 
         # Tie-breaker sorting function
@@ -34,7 +32,7 @@ class RankingEngine(IRankingEngine):
                 -item.score.overall_score,
                 -item.score.reliability_subscore,
                 len(item.candidate.transfers),
-                -item.score.cost_subscore
+                -item.score.cost_subscore,
             )
 
         sorted_candidates = sorted(scored_candidates, key=sort_key)
@@ -45,7 +43,9 @@ class RankingEngine(IRankingEngine):
         # If experimental ranking flag is enabled, we could re-sort alternatives.
         if is_feature_enabled("FF_ENABLE_EXPERIMENTAL_RANKING"):
             # Mock behavior: move cheaper alternatives higher
-            alternatives = sorted(alternatives, key=lambda a: a.score.cost_subscore, reverse=True)
+            alternatives = sorted(
+                alternatives, key=lambda a: a.score.cost_subscore, reverse=True
+            )
 
         return JourneyRecommendationDTO(
             recommendation_id=f"rec_{uuid.uuid4().hex[:8]}",
@@ -53,5 +53,5 @@ class RankingEngine(IRankingEngine):
             alternative_candidates=alternatives,
             generated_at=time.time(),
             decision_version="1.0.0",
-            correlation_id="corr-default"
+            correlation_id="corr-default",
         )

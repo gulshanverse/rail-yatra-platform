@@ -5,7 +5,7 @@ from app.booking.dto.models import BookingRequestDTO
 from app.booking.gateway.coordinator import (
     BookingDecisionContextFactory,
     BookingCoordinator,
-    BookingIntelligenceGateway
+    BookingIntelligenceGateway,
 )
 from app.booking.candidate.builder import BookingCandidateBuilder
 from app.booking.availability.engine import AvailabilityEngine
@@ -46,9 +46,12 @@ class TestBookingDecisionEngine(unittest.TestCase):
 
         # RecommendationEngine simulation inline
         class MockRecEngine:
-            async def compile_recommendations(self, primary, alternatives, correlation_id):
+            async def compile_recommendations(
+                self, primary, alternatives, correlation_id
+            ):
                 from app.booking.dto.models import BookingRecommendationDTO
                 import time
+
                 return BookingRecommendationDTO(
                     recommendation_id="rec_bkg_test",
                     correlation_id=correlation_id,
@@ -56,8 +59,9 @@ class TestBookingDecisionEngine(unittest.TestCase):
                     alternative_candidates=alternatives,
                     generated_at=time.time(),
                     decision_version="1.0.0",
-                    ttl_seconds=900
+                    ttl_seconds=900,
                 )
+
         self.recommendation_engine = MockRecEngine()
 
         self.coordinator = BookingCoordinator(
@@ -75,7 +79,7 @@ class TestBookingDecisionEngine(unittest.TestCase):
             recommendation_engine=self.recommendation_engine,
             audit_engine=self.audit_engine,
             metrics_engine=self.metrics_engine,
-            event_publisher=self.event_publisher
+            event_publisher=self.event_publisher,
         )
 
         self.gateway = BookingIntelligenceGateway(coordinator=self.coordinator)
@@ -84,15 +88,13 @@ class TestBookingDecisionEngine(unittest.TestCase):
         req = BookingRequestDTO(
             traveler_id="",  # invalid
             journey_id="jrn_01",
-            preferences={}
+            preferences={},
         )
         with self.assertRaises(ValueError):
             BookingDecisionContextFactory.create_context(req, "corr-01")
 
         req_ok = BookingRequestDTO(
-            traveler_id="user_01",
-            journey_id="jrn_01",
-            preferences={}
+            traveler_id="user_01", journey_id="jrn_01", preferences={}
         )
         context = BookingDecisionContextFactory.create_context(req_ok, "corr-01")
         self.assertEqual(context.correlation_id, "corr-01")
@@ -111,6 +113,7 @@ class TestBookingDecisionEngine(unittest.TestCase):
     def test_boarding_optimization(self):
         # Setup candidate
         from app.booking.dto.models import BookingCandidateDTO
+
         candidate = BookingCandidateDTO(
             candidate_id="c_01",
             journey_id="j_01",
@@ -118,20 +121,25 @@ class TestBookingDecisionEngine(unittest.TestCase):
             selected_quota="GN",
             boarding_point="JHS",
             class_code="3A",
-            estimated_fare=500.0
+            estimated_fare=500.0,
         )
         # Shift enabled
-        boarding_opt = self.boarding_engine.optimize_boarding(candidate, {"enable_boarding_shift": True})
+        boarding_opt = self.boarding_engine.optimize_boarding(
+            candidate, {"enable_boarding_shift": True}
+        )
         self.assertTrue(boarding_opt.boarding_point_changed)
         self.assertEqual(boarding_opt.boarding_station, "NDLS")
 
         # Shift disabled
-        boarding_std = self.boarding_engine.optimize_boarding(candidate, {"enable_boarding_shift": False})
+        boarding_std = self.boarding_engine.optimize_boarding(
+            candidate, {"enable_boarding_shift": False}
+        )
         self.assertFalse(boarding_std.boarding_point_changed)
         self.assertEqual(boarding_std.boarding_station, "JHS")
 
     def test_constraints_pruning(self):
         from app.booking.dto.models import BookingCandidateDTO
+
         candidates = [
             BookingCandidateDTO(
                 candidate_id="c_cheap",
@@ -140,7 +148,7 @@ class TestBookingDecisionEngine(unittest.TestCase):
                 selected_quota="GN",
                 boarding_point="NDLS",
                 class_code="SL",
-                estimated_fare=350.0
+                estimated_fare=350.0,
             ),
             BookingCandidateDTO(
                 candidate_id="c_expensive",
@@ -149,11 +157,13 @@ class TestBookingDecisionEngine(unittest.TestCase):
                 selected_quota="GN",
                 boarding_point="NDLS",
                 class_code="1A",
-                estimated_fare=2500.0
-            )
+                estimated_fare=2500.0,
+            ),
         ]
         # Restrict max budget to 1000
-        pruned = self.constraint_engine.prune_candidates(candidates, {"max_budget": 1000.0})
+        pruned = self.constraint_engine.prune_candidates(
+            candidates, {"max_budget": 1000.0}
+        )
         self.assertEqual(len(pruned), 1)
         self.assertEqual(pruned[0].candidate_id, "c_cheap")
 
@@ -161,7 +171,11 @@ class TestBookingDecisionEngine(unittest.TestCase):
         req = BookingRequestDTO(
             traveler_id="user_123",
             journey_id="journey_999",
-            preferences={"enable_boarding_shift": True, "is_senior": True, "max_budget": 3000.0}
+            preferences={
+                "enable_boarding_shift": True,
+                "is_senior": True,
+                "max_budget": 3000.0,
+            },
         )
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -171,10 +185,12 @@ class TestBookingDecisionEngine(unittest.TestCase):
         self.assertIsNotNone(recommendation.primary_candidate)
         self.assertEqual(recommendation.correlation_id, "correlation-9902")
         primary = recommendation.primary_candidate
-        
+
         # Verify scores and risks are compiled
         self.assertTrue(0.0 <= primary.score.overall_score <= 100.0)
-        self.assertIn(primary.risk.overall_risk_level, ("LOW", "MEDIUM", "HIGH", "CRITICAL"))
+        self.assertIn(
+            primary.risk.overall_risk_level, ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+        )
         self.assertTrue(len(primary.explanation.get("reason_codes", [])) > 0)
         loop.close()
 

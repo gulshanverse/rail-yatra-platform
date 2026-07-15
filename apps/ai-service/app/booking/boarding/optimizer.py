@@ -14,9 +14,12 @@ class BoardingEngine(IBoardingEngine):
         changed = False
         offset_km = 0.0
         risk = "LOW"
-        
+
         # If requested boarding offset is enabled in traveler profile preferences
-        if profile.get("enable_boarding_shift", False) and candidate.selected_quota == "GN":
+        if (
+            profile.get("enable_boarding_shift", False)
+            and candidate.selected_quota == "GN"
+        ):
             # Simulate shift boarding point to train origin to bypass ticket limits
             boarding_point = "NDLS"  # Origin station
             changed = True
@@ -28,5 +31,5 @@ class BoardingEngine(IBoardingEngine):
             original_boarding_station=original,
             boarding_point_changed=changed,
             distance_offset_km=offset_km,
-            no_show_risk=risk
+            no_show_risk=risk,
         )

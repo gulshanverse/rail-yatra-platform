@@ -26,9 +26,7 @@ POLICY_REGISTRY = {
         "medium_confidence_wl_limit": 30,
         "min_days_to_departure": 3,
     },
-    "Quota": {
-        "priority_order": ["HP", "SS", "LD", "DF", "GN", "TQ", "PT"]
-    },
+    "Quota": {"priority_order": ["HP", "SS", "LD", "DF", "GN", "TQ", "PT"]},
     "Boarding": {
         "max_boarding_offset_km": 100,
         "cost_overhead_pct": 0.25,
@@ -44,7 +42,7 @@ POLICY_REGISTRY = {
             "comfort": 0.20,
             "time": 0.10,
         }
-    }
+    },
 }
 
 

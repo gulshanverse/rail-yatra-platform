@@ -7,7 +7,9 @@ from datetime import datetime
 class BookingRequestDTO(BaseModel):
     traveler_id: str = Field(..., description="Unique traveler profile identifier")
     journey_id: str = Field(..., description="Unique physical route journey identifier")
-    preferences: Dict[str, Any] = Field(default_factory=dict, description="Passenger seat and comfort preferences")
+    preferences: Dict[str, Any] = Field(
+        default_factory=dict, description="Passenger seat and comfort preferences"
+    )
     timestamp: float = Field(default_factory=datetime.utcnow().timestamp)
 
 

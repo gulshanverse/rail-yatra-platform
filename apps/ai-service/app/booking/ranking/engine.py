@@ -5,13 +5,11 @@ from app.booking.interfaces.contracts import IRankingEngine
 
 class RankingEngine(IRankingEngine):
     def rank_candidates(
-        self,
-        scored_candidates: List[Any],
-        weights: Dict[str, float]
+        self, scored_candidates: List[Any], weights: Dict[str, float]
     ) -> List[Any]:
         if not scored_candidates:
             return []
-            
+
         # Tie-breaker sorting function
         # Priority sort:
         # 1. Overall Score descending
@@ -23,7 +21,7 @@ class RankingEngine(IRankingEngine):
                 -item.score.overall_score,
                 -item.score.confirmation_subscore,
                 -item.score.cost_subscore,
-                item.risk.connection_failure_probability
+                item.risk.connection_failure_probability,
             )
-            
+
         return sorted(scored_candidates, key=sort_key)

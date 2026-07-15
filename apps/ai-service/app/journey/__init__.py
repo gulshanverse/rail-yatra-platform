@@ -8,7 +8,7 @@ from app.journey.dto.models import (
     TransferDTO,
     JourneyScoreDTO,
     JourneyRiskDTO,
-    JourneyExplanationDTO
+    JourneyExplanationDTO,
 )
 from app.journey.interfaces.contracts import (
     IJourneyGateway,
@@ -22,10 +22,13 @@ from app.journey.interfaces.contracts import (
     IExplanationEngine,
     IAuditEngine,
     IMetricsEngine,
-    IEventPublisher
+    IEventPublisher,
 )
 from app.journey.config.registry import is_feature_enabled, get_policy
-from app.journey.gateway.coordinator import JourneyIntelligenceGateway, JourneyDecisionContext
+from app.journey.gateway.coordinator import (
+    JourneyIntelligenceGateway,
+    JourneyDecisionContext,
+)
 from app.journey.candidate.builder import JourneyCandidateBuilder
 from app.journey.constraints.engine import ConstraintEngine
 from app.journey.route.analyzer import RouteAnalyzer

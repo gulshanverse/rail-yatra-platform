@@ -11,7 +11,7 @@ class AvailabilityEngine(IAvailabilityEngine):
     ) -> Dict[str, AvailabilityDTO]:
         availability_map = {}
         now = time.time()
-        
+
         for candidate in candidates:
             # Simulated backend lookup: GN has active confirmed seats, SS is waitlisted
             if candidate.selected_quota == "GN":
@@ -19,14 +19,14 @@ class AvailabilityEngine(IAvailabilityEngine):
                     status="AVAILABLE",
                     available_seats=15,
                     waitlist_position=0,
-                    freshness_timestamp=now
+                    freshness_timestamp=now,
                 )
             else:
                 availability_map[candidate.candidate_id] = AvailabilityDTO(
                     status="WL",
                     available_seats=0,
                     waitlist_position=5,
-                    freshness_timestamp=now
+                    freshness_timestamp=now,
                 )
-                
+
         return availability_map

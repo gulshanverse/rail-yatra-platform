@@ -5,7 +5,7 @@ from app.journey.strategy.implementations import (
     FastestStrategy,
     CheapestStrategy,
     MostReliableStrategy,
-    SafestStrategy
+    SafestStrategy,
 )
 
 

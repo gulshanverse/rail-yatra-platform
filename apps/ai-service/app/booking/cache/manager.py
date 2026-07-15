@@ -14,7 +14,9 @@ class BookingCacheManager(ICacheManager):
             return await self.redis_client.get(key)
         return self._local_cache.get(key)
 
-    async def cache_recommendation(self, key: str, data: Dict[str, Any], ttl: int) -> None:
+    async def cache_recommendation(
+        self, key: str, data: Dict[str, Any], ttl: int
+    ) -> None:
         if self.redis_client:
             # Simulated Redis set
             await self.redis_client.set(key, data, ttl)

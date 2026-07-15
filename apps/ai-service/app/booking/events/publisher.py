@@ -10,9 +10,7 @@ class BookingEventPublisher(IEventPublisher):
     def __init__(self, message_broker: Any = None):
         self.message_broker = message_broker
 
-    async def publish_event(
-        self, name: str, payload: Dict[str, Any]
-    ) -> None:
+    async def publish_event(self, name: str, payload: Dict[str, Any]) -> None:
         logger.info(f"PUBLISHING_BOOKING_EVENT name={name} payload={payload}")
         if self.message_broker:
             await self.message_broker.publish(name, payload)

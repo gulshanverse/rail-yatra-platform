@@ -25,7 +25,7 @@ class ConstraintEngine(IConstraintEngine):
             # If wheelchair required, we check if station has accessible platform features.
             if wheelchair_required:
                 # Simulates station and train compatibility filters
-                if candidate.total_distance_km > 1000: 
+                if candidate.total_distance_km > 1000:
                     # Mock filter: assume long-distance connecting stations are complex and lack step-free access
                     continue
 

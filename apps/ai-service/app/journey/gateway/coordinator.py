@@ -14,17 +14,18 @@ from app.journey.interfaces.contracts import (
     IExplanationEngine,
     IAuditEngine,
     IMetricsEngine,
-    IEventPublisher
+    IEventPublisher,
 )
 from app.journey.dto.models import (
     JourneyQueryDTO,
     JourneyRecommendationDTO,
-    RecommendedJourneyDTO
+    RecommendedJourneyDTO,
 )
 
 
 class JourneyDecisionContext:
     """Immutable Decision Context holding parameters during computation runs."""
+
     def __init__(
         self,
         correlation_id: str,
@@ -33,7 +34,7 @@ class JourneyDecisionContext:
         scores: Dict[str, Any] = None,
         risks: Dict[str, Any] = None,
         explanations: Dict[str, Any] = None,
-        recommendation: Optional[JourneyRecommendationDTO] = None
+        recommendation: Optional[JourneyRecommendationDTO] = None,
     ):
         self.correlation_id = correlation_id
         self.query = query
@@ -51,7 +52,7 @@ class JourneyDecisionContext:
             scores=kwargs.get("scores", self.scores),
             risks=kwargs.get("risks", self.risks),
             explanations=kwargs.get("explanations", self.explanations),
-            recommendation=kwargs.get("recommendation", self.recommendation)
+            recommendation=kwargs.get("recommendation", self.recommendation),
         )
 
 
@@ -68,7 +69,7 @@ class JourneyIntelligenceGateway(IJourneyGateway):
         explanation_engine: IExplanationEngine,
         audit_engine: IAuditEngine,
         metrics_engine: IMetricsEngine,
-        event_publisher: IEventPublisher
+        event_publisher: IEventPublisher,
     ):
         self.candidate_builder = candidate_builder
         self.constraint_engine = constraint_engine
@@ -86,7 +87,7 @@ class JourneyIntelligenceGateway(IJourneyGateway):
         self, query: JourneyQueryDTO, correlation_id: str
     ) -> JourneyRecommendationDTO:
         start_time = time.time()
-        
+
         # Enforce validation invariants
         if query.origin == query.destination:
             raise ValueError("Origin cannot match destination.")
@@ -94,9 +95,14 @@ class JourneyIntelligenceGateway(IJourneyGateway):
         # 1. candidate building
         t_cb_start = time.time()
         candidates = await self.candidate_builder.build_candidates(
-            query.origin, query.destination, query.earliest_departure, query.latest_arrival
+            query.origin,
+            query.destination,
+            query.earliest_departure,
+            query.latest_arrival,
         )
-        self.metrics_engine.record_metrics("candidate_builder_latency_ms", (time.time() - t_cb_start) * 1000)
+        self.metrics_engine.record_metrics(
+            "candidate_builder_latency_ms", (time.time() - t_cb_start) * 1000
+        )
 
         # 2. constraint checking
         pruned_candidates = self.constraint_engine.evaluate_constraints(
@@ -109,7 +115,9 @@ class JourneyIntelligenceGateway(IJourneyGateway):
             # 3. Route Analyzer
             t_route_start = time.time()
             route_intel = await self.route_analyzer.analyze_route(candidate)
-            self.metrics_engine.record_metrics("route_analyzer_latency_ms", (time.time() - t_route_start) * 1000)
+            self.metrics_engine.record_metrics(
+                "route_analyzer_latency_ms", (time.time() - t_route_start) * 1000
+            )
 
             # 4. Transfer Analyzer
             transfer_intel = self.transfer_analyzer.evaluate_transfers(
@@ -123,7 +131,11 @@ class JourneyIntelligenceGateway(IJourneyGateway):
 
             # 6. Scoring Engine
             score_dto = self.scoring_engine.compute_scores(
-                candidate, risk_dto, route_intel, transfer_intel, query.preference_weights
+                candidate,
+                risk_dto,
+                route_intel,
+                transfer_intel,
+                query.preference_weights,
             )
 
             # 7. Explanation Engine
@@ -140,7 +152,7 @@ class JourneyIntelligenceGateway(IJourneyGateway):
                     risk=risk_dto,
                     explanation=explanation_dto,
                     strategy_tag="BEST_ITINERARY",
-                    confidence_score=score_dto.confidence_subscore
+                    confidence_score=score_dto.confidence_subscore,
                 )
             )
 
@@ -161,9 +173,11 @@ class JourneyIntelligenceGateway(IJourneyGateway):
             correlation_id,
             {
                 "query": query.model_dump(mode="json"),
-                "primary": recommendation_dto.primary_candidate.model_dump(mode="json") if recommendation_dto.primary_candidate else None,
-                "latency_ms": (time.time() - start_time) * 1000
-            }
+                "primary": recommendation_dto.primary_candidate.model_dump(mode="json")
+                if recommendation_dto.primary_candidate
+                else None,
+                "latency_ms": (time.time() - start_time) * 1000,
+            },
         )
 
         # 10. Publish Domain Event
@@ -172,11 +186,13 @@ class JourneyIntelligenceGateway(IJourneyGateway):
             {
                 "recommendation_id": recommendation_dto.recommendation_id,
                 "correlation_id": correlation_id,
-                "timestamp": recommendation_dto.generated_at
-            }
+                "timestamp": recommendation_dto.generated_at,
+            },
         )
 
         # Telemetry
-        self.metrics_engine.record_metrics("journey_pipeline_latency_ms", (time.time() - start_time) * 1000)
+        self.metrics_engine.record_metrics(
+            "journey_pipeline_latency_ms", (time.time() - start_time) * 1000
+        )
 
         return recommendation_dto

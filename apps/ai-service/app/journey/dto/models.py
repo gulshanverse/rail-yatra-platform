@@ -5,12 +5,21 @@ from datetime import datetime
 
 
 class JourneyQueryDTO(BaseModel):
-    origin: str = Field(..., min_length=3, max_length=5, description="Origin station code")
-    destination: str = Field(..., min_length=3, max_length=5, description="Destination station code")
+    origin: str = Field(
+        ..., min_length=3, max_length=5, description="Origin station code"
+    )
+    destination: str = Field(
+        ..., min_length=3, max_length=5, description="Destination station code"
+    )
     earliest_departure: datetime = Field(..., description="Start of departure window")
     latest_arrival: datetime = Field(..., description="End of arrival window")
-    traveler_profile: Dict[str, Any] = Field(default_factory=dict, description="Passenger attributes (mobility, age, medical)")
-    preference_weights: Dict[str, float] = Field(default_factory=dict, description="Custom subscore preference weights")
+    traveler_profile: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Passenger attributes (mobility, age, medical)",
+    )
+    preference_weights: Dict[str, float] = Field(
+        default_factory=dict, description="Custom subscore preference weights"
+    )
 
 
 class SegmentDTO(BaseModel):

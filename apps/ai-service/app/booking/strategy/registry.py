@@ -5,7 +5,7 @@ from app.booking.strategy.implementations import (
     HighestConfirmationStrategy,
     LowestRiskStrategy,
     BudgetStrategy,
-    ComfortStrategy
+    ComfortStrategy,
 )
 
 

@@ -15,7 +15,11 @@ class TransferAnalyzer(ITransferAnalyzer):
         mct_cross = policy.get("mct_cross_platform", 30)
 
         is_senior = traveler_profile.get("is_senior", False)
-        walking_speed = policy.get("senior_walking_speed_mps", 0.8) if is_senior else policy.get("base_walking_speed_mps", 1.2)
+        walking_speed = (
+            policy.get("senior_walking_speed_mps", 0.8)
+            if is_senior
+            else policy.get("base_walking_speed_mps", 1.2)
+        )
 
         total_walk_time_minutes = 0.0
         missed_connection_probability = 0.0
@@ -40,11 +44,13 @@ class TransferAnalyzer(ITransferAnalyzer):
                 missed_connection_probability += 0.02
 
         # Bound probability to [0.0, 1.0]
-        missed_connection_probability = min(1.0, max(0.0, missed_connection_probability))
+        missed_connection_probability = min(
+            1.0, max(0.0, missed_connection_probability)
+        )
 
         return {
             "total_walking_minutes": round(total_walk_time_minutes, 2),
             "missed_connection_probability": missed_connection_probability,
             "requires_escalator": is_senior,
-            "transfer_complexity_index": 0.80 if len(candidate.transfers) > 1 else 0.30
+            "transfer_complexity_index": 0.80 if len(candidate.transfers) > 1 else 0.30,
         }

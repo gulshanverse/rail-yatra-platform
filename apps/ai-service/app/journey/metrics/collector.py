@@ -13,8 +13,8 @@ class MetricsEngine(IMetricsEngine):
         tag_str = ""
         if tags:
             tag_str = " ".join(f"{k}={v}" for k, v in tags.items())
-        
+
         # Log structure for Datadog / OpenTelemetry parsers
         logger.info(f"METRIC_LOG name={metric_name} value={value} {tag_str}")
-        
+
         # In a production context, write directly to statsd or prometheus client registry.

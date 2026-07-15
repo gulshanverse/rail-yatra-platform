@@ -188,7 +188,7 @@ class IRailwayIntelligenceGateway(ABC):
         self,
         train_number: str,
         boarding_station: str,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """
         Coordinates validation, queries the 5.1 integration gateway, normalizes outputs,
@@ -198,13 +198,10 @@ class IRailwayIntelligenceGateway(ABC):
 
     @abstractmethod
     async def get_pnr_intelligence(
-        self,
-        pnr_number: str,
-        context: Optional[Dict[str, Any]] = None
+        self, pnr_number: str, context: Optional[Dict[str, Any]] = None
     ) -> Any:
         """
         Validates PNR format, queries GDS, normalizes traveler structures,
         and encrypts PII metadata fields.
         """
         pass
-

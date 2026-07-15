@@ -9,7 +9,9 @@ class HighestConfirmationStrategy(IStrategy):
         return "HIGHEST_CONFIRMATION"
 
     def evaluate(self, candidates: List[Any]) -> List[Any]:
-        return sorted(candidates, key=lambda c: c.score.confirmation_subscore, reverse=True)
+        return sorted(
+            candidates, key=lambda c: c.score.confirmation_subscore, reverse=True
+        )
 
 
 class LowestRiskStrategy(IStrategy):

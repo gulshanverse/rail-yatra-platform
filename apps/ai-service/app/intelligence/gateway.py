@@ -254,9 +254,7 @@ class RailwayIntelligenceGateway(IRailwayIntelligenceGateway):
         normalized_passengers = []
         for i, p in enumerate(raw_data.get("passengers", [])):
             # Encrypt names of passengers using mock crypt manager
-            self.metadata_manager.encrypt_pii(
-                p.get("name", f"Passenger {i + 1}")
-            )
+            self.metadata_manager.encrypt_pii(p.get("name", f"Passenger {i + 1}"))
             normalized_passengers.append(
                 PassengerCanonical(
                     passenger_number=p.get("passenger_number", i + 1),

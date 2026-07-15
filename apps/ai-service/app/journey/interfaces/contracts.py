@@ -8,7 +8,7 @@ from app.journey.dto.models import (
     JourneyScoreDTO,
     JourneyRiskDTO,
     JourneyExplanationDTO,
-    RecommendedJourneyDTO
+    RecommendedJourneyDTO,
 )
 
 
@@ -50,9 +50,7 @@ class IConstraintEngine(ABC):
 
 class IRouteAnalyzer(ABC):
     @abstractmethod
-    async def analyze_route(
-        self, candidate: JourneyCandidateDTO
-    ) -> Dict[str, Any]:
+    async def analyze_route(self, candidate: JourneyCandidateDTO) -> Dict[str, Any]:
         """
         Evaluates track corridor stability, diversion risks,
         and structural complexity profiles.
@@ -79,7 +77,7 @@ class IRiskEngine(ABC):
         candidate: JourneyCandidateDTO,
         route_intel: Dict[str, Any],
         transfer_intel: Dict[str, Any],
-        traveler_profile: Dict[str, Any]
+        traveler_profile: Dict[str, Any],
     ) -> JourneyRiskDTO:
         """
         Computes composite delay, cancellation, and connection failure risks.
@@ -95,7 +93,7 @@ class IScoringEngine(ABC):
         risk: JourneyRiskDTO,
         route_intel: Dict[str, Any],
         transfer_intel: Dict[str, Any],
-        weights: Dict[str, float]
+        weights: Dict[str, float],
     ) -> JourneyScoreDTO:
         """
         Calculates normalized comfort, cost, time, and reliability scores.
@@ -122,9 +120,7 @@ class IStrategy(ABC):
 class IRankingEngine(ABC):
     @abstractmethod
     def rank_recommendations(
-        self,
-        scored_candidates: List[RecommendedJourneyDTO],
-        weights: Dict[str, float]
+        self, scored_candidates: List[RecommendedJourneyDTO], weights: Dict[str, float]
     ) -> JourneyRecommendationDTO:
         """
         Ranks primary candidates, executes tie-breaking, and applies traveler preference overrides.
@@ -139,7 +135,7 @@ class IExplanationEngine(ABC):
         candidate: JourneyCandidateDTO,
         score: JourneyScoreDTO,
         risk: JourneyRiskDTO,
-        traveler_profile: Dict[str, Any]
+        traveler_profile: Dict[str, Any],
     ) -> JourneyExplanationDTO:
         """
         Compiles scoring matrices, constraint traces, and raw evidence
@@ -155,7 +151,7 @@ class IAuditEngine(ABC):
         decision_id: str,
         recommendation_id: str,
         correlation_id: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
     ) -> None:
         """
         Writes execution record asynchronously to database partitions or logs.

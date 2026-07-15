@@ -12,7 +12,7 @@ class ScoringEngine(IScoringEngine):
         risk: JourneyRiskDTO,
         route_intel: Dict[str, Any],
         transfer_intel: Dict[str, Any],
-        weights: Dict[str, float]
+        weights: Dict[str, float],
     ) -> JourneyScoreDTO:
         # 1. Reliability Score ($S_R$)
         reliability = 100.0 * route_intel.get("route_stability", 0.80)
@@ -32,7 +32,9 @@ class ScoringEngine(IScoringEngine):
         time_score = max(10.0, 100.0 - (duration / 10.0))
 
         # 5. Accessibility Score ($S_A$)
-        accessibility = 100.0 if not transfer_intel.get("requires_escalator", False) else 70.0
+        accessibility = (
+            100.0 if not transfer_intel.get("requires_escalator", False) else 70.0
+        )
 
         # 6. Safety Score
         safety = 100.0 * (1.0 - risk.safety_risk_score)
@@ -40,7 +42,9 @@ class ScoringEngine(IScoringEngine):
         # 7. Transfer Score
         transfer_score = 100.0
         if len(candidate.transfers) > 0:
-            transfer_score = max(10.0, 100.0 - (transfer_intel.get("total_walking_minutes", 0) * 5.0))
+            transfer_score = max(
+                10.0, 100.0 - (transfer_intel.get("total_walking_minutes", 0) * 5.0)
+            )
 
         # 8. Delay Score
         delay_score = 100.0 * (1.0 - risk.delay_risk_score)
@@ -50,17 +54,19 @@ class ScoringEngine(IScoringEngine):
 
         # Get weights from policy if empty
         policy_weights = get_policy("Scoring").get("weights", {})
-        w_reliability = weights.get("reliability", policy_weights.get("reliability", 0.30))
+        w_reliability = weights.get(
+            "reliability", policy_weights.get("reliability", 0.30)
+        )
         w_comfort = weights.get("comfort", policy_weights.get("comfort", 0.20))
         w_cost = weights.get("cost", policy_weights.get("cost", 0.30))
         w_duration = weights.get("duration", policy_weights.get("duration", 0.20))
 
         # Normalized Aggregation
         overall = (
-            (reliability * w_reliability) +
-            (comfort * w_comfort) +
-            (cost * w_cost) +
-            (time_score * w_duration)
+            (reliability * w_reliability)
+            + (comfort * w_comfort)
+            + (cost * w_cost)
+            + (time_score * w_duration)
         )
         overall = min(100.0, max(0.0, overall))
 
@@ -74,5 +80,5 @@ class ScoringEngine(IScoringEngine):
             safety_subscore=round(safety, 2),
             transfer_subscore=round(transfer_score, 2),
             delay_subscore=round(delay_score, 2),
-            confidence_subscore=round(confidence, 2)
+            confidence_subscore=round(confidence, 2),
         )

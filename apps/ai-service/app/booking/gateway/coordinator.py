@@ -19,18 +19,19 @@ from app.booking.interfaces.contracts import (
     IExplanationEngine,
     IAuditEngine,
     IMetricsEngine,
-    IEventPublisher
+    IEventPublisher,
 )
 from app.booking.dto.models import (
     BookingRequestDTO,
     BookingRecommendationDTO,
     RecommendedBookingDTO,
-    AuditDTO
+    AuditDTO,
 )
 
 
 class BookingDecisionContext:
     """Immutable Decision Context holding parameters during calculation runs."""
+
     def __init__(
         self,
         correlation_id: str,
@@ -44,7 +45,7 @@ class BookingDecisionContext:
         booking_risk: Dict[str, Any] = None,
         booking_score: Dict[str, Any] = None,
         strategy_result: Dict[str, Any] = None,
-        recommendation: Optional[BookingRecommendationDTO] = None
+        recommendation: Optional[BookingRecommendationDTO] = None,
     ):
         self.correlation_id = correlation_id
         self.request = request
@@ -72,12 +73,13 @@ class BookingDecisionContext:
             booking_risk=kwargs.get("booking_risk", self.booking_risk),
             booking_score=kwargs.get("booking_score", self.booking_score),
             strategy_result=kwargs.get("strategy_result", self.strategy_result),
-            recommendation=kwargs.get("recommendation", self.recommendation)
+            recommendation=kwargs.get("recommendation", self.recommendation),
         )
 
 
 class BookingDecisionContextFactory:
     """Centralized Factory for creating and validating BookingDecisionContext."""
+
     @staticmethod
     def create_context(
         request: BookingRequestDTO, correlation_id: str, journey: Any = None
@@ -91,9 +93,7 @@ class BookingDecisionContextFactory:
             raise ValueError("Correlation ID is required.")
 
         return BookingDecisionContext(
-            correlation_id=correlation_id,
-            request=request,
-            journey=journey
+            correlation_id=correlation_id, request=request, journey=journey
         )
 
 
@@ -114,7 +114,7 @@ class BookingCoordinator(IBookingCoordinator):
         recommendation_engine: IRecommendationEngine,
         audit_engine: IAuditEngine,
         metrics_engine: IMetricsEngine,
-        event_publisher: IEventPublisher
+        event_publisher: IEventPublisher,
     ):
         self.candidate_builder = candidate_builder
         self.availability_engine = availability_engine
@@ -132,21 +132,33 @@ class BookingCoordinator(IBookingCoordinator):
         self.metrics_engine = metrics_engine
         self.event_publisher = event_publisher
 
-    async def coordinate_decision(self, context: BookingDecisionContext) -> BookingRecommendationDTO:
+    async def coordinate_decision(
+        self, context: BookingDecisionContext
+    ) -> BookingRecommendationDTO:
         start_time = time.time()
 
         # 1. Candidate Builder
         t_cb = time.time()
-        candidates = self.candidate_builder.build_booking_candidates(context.journey, context.request.preferences)
-        self.metrics_engine.increment_metric("candidate_builder_latency_ms", (time.time() - t_cb) * 1000)
+        candidates = self.candidate_builder.build_booking_candidates(
+            context.journey, context.request.preferences
+        )
+        self.metrics_engine.increment_metric(
+            "candidate_builder_latency_ms", (time.time() - t_cb) * 1000
+        )
 
         # 2. Availability Engine
         t_av = time.time()
-        availability_map = await self.availability_engine.verify_availability(candidates)
-        self.metrics_engine.increment_metric("availability_latency_ms", (time.time() - t_av) * 1000)
+        availability_map = await self.availability_engine.verify_availability(
+            candidates
+        )
+        self.metrics_engine.increment_metric(
+            "availability_latency_ms", (time.time() - t_av) * 1000
+        )
 
         # 3. Constraint checking & pruning
-        pruned_candidates = self.constraint_engine.prune_candidates(candidates, context.request.preferences)
+        pruned_candidates = self.constraint_engine.prune_candidates(
+            candidates, context.request.preferences
+        )
 
         scored_recommended_bookings = []
 
@@ -161,14 +173,22 @@ class BookingCoordinator(IBookingCoordinator):
             self.quota_engine.resolve_quotas(context.request.preferences, avail)
 
             # 6. Boarding Engine
-            boarding_dto = self.boarding_engine.optimize_boarding(candidate, context.request.preferences)
+            boarding_dto = self.boarding_engine.optimize_boarding(
+                candidate, context.request.preferences
+            )
 
             # 7. Risk Engine
-            risk_dto = self.risk_engine.calculate_risk(candidate, avail, confirmation_dto, boarding_dto)
+            risk_dto = self.risk_engine.calculate_risk(
+                candidate, avail, confirmation_dto, boarding_dto
+            )
 
             # 8. Scoring Engine
             score_dto = self.scoring_engine.compute_booking_score(
-                candidate, avail, confirmation_dto, risk_dto, context.request.preferences.get("weights", {})
+                candidate,
+                avail,
+                confirmation_dto,
+                risk_dto,
+                context.request.preferences.get("weights", {}),
             )
 
             # 9. Explanation Engine
@@ -183,15 +203,19 @@ class BookingCoordinator(IBookingCoordinator):
                     score=score_dto,
                     risk=risk_dto,
                     explanation=explanation_dto.model_dump(),
-                    strategy_tag="DEFAULT"
+                    strategy_tag="DEFAULT",
                 )
             )
 
         # 10. Conflict Resolution
-        resolved_bookings = self.conflict_resolver.resolve_conflicts(scored_recommended_bookings, context.request.preferences)
+        resolved_bookings = self.conflict_resolver.resolve_conflicts(
+            scored_recommended_bookings, context.request.preferences
+        )
 
         # 11. Ranking Engine
-        ranked_bookings = self.ranking_engine.rank_candidates(resolved_bookings, context.request.preferences.get("weights", {}))
+        ranked_bookings = self.ranking_engine.rank_candidates(
+            resolved_bookings, context.request.preferences.get("weights", {})
+        )
 
         primary = ranked_bookings[0] if ranked_bookings else None
         alternatives = ranked_bookings[1:] if len(ranked_bookings) > 1 else []
@@ -214,8 +238,10 @@ class BookingCoordinator(IBookingCoordinator):
             risk_breakdown=primary.risk.model_dump() if primary else {},
             confidence=primary.score.confirmation_subscore / 100.0 if primary else 0.0,
             reason_codes=primary.explanation.get("reason_codes", []) if primary else [],
-            supporting_evidence=primary.explanation.get("score_breakdown", {}) if primary else {},
-            decision_outcome="GENERATED"
+            supporting_evidence=primary.explanation.get("score_breakdown", {})
+            if primary
+            else {},
+            decision_outcome="GENERATED",
         )
         await self.audit_engine.log_decision(audit_record)
 
@@ -225,11 +251,13 @@ class BookingCoordinator(IBookingCoordinator):
             {
                 "recommendation_id": recommendation_dto.recommendation_id,
                 "correlation_id": context.correlation_id,
-                "timestamp": recommendation_dto.generated_at
-            }
+                "timestamp": recommendation_dto.generated_at,
+            },
         )
 
-        self.metrics_engine.increment_metric("booking_pipeline_latency_ms", (time.time() - start_time) * 1000)
+        self.metrics_engine.increment_metric(
+            "booking_pipeline_latency_ms", (time.time() - start_time) * 1000
+        )
 
         return recommendation_dto
 
@@ -244,6 +272,8 @@ class BookingIntelligenceGateway(IBookingGateway):
         # Construct the context using the Factory
         # Journey parameters represents physical base tracks (simulate loading journey tracks)
         journey_mock = {"journey_id": request.journey_id, "distance": 700}
-        context = BookingDecisionContextFactory.create_context(request, correlation_id, journey_mock)
+        context = BookingDecisionContextFactory.create_context(
+            request, correlation_id, journey_mock
+        )
 
         return await self.coordinator.coordinate_decision(context)

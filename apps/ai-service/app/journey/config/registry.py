@@ -26,13 +26,13 @@ POLICY_REGISTRY = {
             "duration": 0.20,
         },
         "version": "1.0.0",
-        "priority": "High"
+        "priority": "High",
     },
     "Risk": {
         "mct_safety_margin_minutes": 20,
         "critical_delay_threshold_minutes": 60,
         "version": "1.0.0",
-        "priority": "High"
+        "priority": "High",
     },
     "Transfer": {
         "base_walking_speed_mps": 1.2,
@@ -41,14 +41,14 @@ POLICY_REGISTRY = {
         "mct_cross_platform": 30,
         "mct_terminal_change": 60,
         "version": "1.0.0",
-        "priority": "Medium"
+        "priority": "Medium",
     },
     "Cache": {
         "ttl_route_seconds": 86400,
         "ttl_recommendation_seconds": 900,
         "version": "1.0.0",
-        "priority": "Medium"
-    }
+        "priority": "Medium",
+    },
 }
 
 

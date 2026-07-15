@@ -10,10 +10,10 @@ class RiskEngine(IRiskEngine):
         candidate: JourneyCandidateDTO,
         route_intel: Dict[str, Any],
         transfer_intel: Dict[str, Any],
-        traveler_profile: Dict[str, Any]
+        traveler_profile: Dict[str, Any],
     ) -> JourneyRiskDTO:
         risk_factors = []
-        
+
         # 1. Delay risk scoring based on historical averages
         avg_delay = route_intel.get("average_delay_minutes", 10.0)
         delay_risk = min(1.0, avg_delay / 120.0)
@@ -40,14 +40,20 @@ class RiskEngine(IRiskEngine):
         # 4. Safety risk
         safety_risk = 0.05
         # Late night halts in minor terminals
-        if len(candidate.transfers) > 0 and route_intel.get("station_complexity", 0) > 0.60:
+        if (
+            len(candidate.transfers) > 0
+            and route_intel.get("station_complexity", 0) > 0.60
+        ):
             safety_risk = 0.35
             risk_factors.append("LATE_NIGHT_LAYOVER")
 
         # Aggregate risk calculation using mathematical hazard models
         # Overall risk level determination
         aggregate_probability = 1.0 - (
-            (1.0 - delay_risk) * (1.0 - missed_prob) * (1.0 - weather_risk) * (1.0 - safety_risk)
+            (1.0 - delay_risk)
+            * (1.0 - missed_prob)
+            * (1.0 - weather_risk)
+            * (1.0 - safety_risk)
         )
         aggregate_probability = min(1.0, max(0.0, aggregate_probability))
 
@@ -66,5 +72,5 @@ class RiskEngine(IRiskEngine):
             delay_risk_score=round(delay_risk, 2),
             weather_risk_score=round(weather_risk, 2),
             safety_risk_score=round(safety_risk, 2),
-            risk_factors=risk_factors
+            risk_factors=risk_factors,
         )

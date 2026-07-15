@@ -13,6 +13,6 @@ class HealthEngine(IHealthEngine):
                 "availability_engine": "HEALTHY",
                 "confirmation_engine": "HEALTHY",
                 "risk_engine": "HEALTHY",
-                "scoring_engine": "HEALTHY"
-            }
+                "scoring_engine": "HEALTHY",
+            },
         }

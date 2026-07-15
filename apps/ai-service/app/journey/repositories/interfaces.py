@@ -15,11 +15,15 @@ class IJourneyRepository(ABC):
 
 class IRecommendationRepository(ABC):
     @abstractmethod
-    async def save_recommendation(self, recommendation_id: str, data: Dict[str, Any]) -> None:
+    async def save_recommendation(
+        self, recommendation_id: str, data: Dict[str, Any]
+    ) -> None:
         pass
 
     @abstractmethod
-    async def get_recommendation(self, recommendation_id: str) -> Optional[Dict[str, Any]]:
+    async def get_recommendation(
+        self, recommendation_id: str
+    ) -> Optional[Dict[str, Any]]:
         pass
 
 
