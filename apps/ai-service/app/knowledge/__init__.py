@@ -17,6 +17,11 @@ from app.knowledge.interfaces import (
     IFreshnessEvaluator,
     ICitationGenerator,
     IEmbeddingEvaluator,
+    IIntentClassifier,
+    IQueryDecomposer,
+    ICrossEncoderReranker,
+    ISemanticCache,
+    ICollectionManager,
 )
 from app.knowledge.exceptions import (
     KnowledgeException,
@@ -66,6 +71,10 @@ from app.knowledge.vector_store import (
 from app.knowledge.retrieval import (
     RetrievalPolicy,
     RetrievalCoordinator,
+    QueryProcessor,
+    IntentClassifier,
+    QueryDecomposer,
+    CrossEncoderReranker,
 )
 from app.knowledge.assembly import (
     ContextAssembler,
@@ -73,6 +82,13 @@ from app.knowledge.assembly import (
 from app.knowledge.ingestion import (
     DocumentIngestionPipeline,
 )
+from app.knowledge.cache import (
+    SemanticCache,
+)
+from app.knowledge.collection import (
+    CollectionManager,
+)
+
 
 __all__ = [
     # Interfaces
@@ -132,8 +148,21 @@ __all__ = [
     # Retrieval
     "RetrievalPolicy",
     "RetrievalCoordinator",
+    "QueryProcessor",
+    "IntentClassifier",
+    "QueryDecomposer",
+    "CrossEncoderReranker",
     # Context Assembly
     "ContextAssembler",
     # Ingestion orchestrator
     "DocumentIngestionPipeline",
+    # Cache and Collection Manager
+    "SemanticCache",
+    "CollectionManager",
+    # Interfaces
+    "IIntentClassifier",
+    "IQueryDecomposer",
+    "ICrossEncoderReranker",
+    "ISemanticCache",
+    "ICollectionManager",
 ]

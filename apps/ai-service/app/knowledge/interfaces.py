@@ -3,7 +3,7 @@ Interface contracts for the Enterprise Knowledge & Embedding Platform.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 
 class IKnowledgeSource(ABC):
@@ -219,4 +219,84 @@ class IEmbeddingEvaluator(ABC):
         self, provider: IEmbeddingProvider, golden_dataset: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Calculates benchmark metrics (Precision, Recall, MRR, nDCG, Latency, Cost)."""
+        pass
+
+
+# ======================================================================
+# Phase 4.2 Planning Improvements Extension Interfaces
+# ======================================================================
+
+
+class IIntentClassifier(ABC):
+    """Classifies user queries into distinct intent categories."""
+
+    @abstractmethod
+    def classify_intent(self, query: str) -> str:
+        """Determines the intent class (Rules, PNR, Schedule, FAQ, etc.)."""
+        pass
+
+
+class IQueryDecomposer(ABC):
+    """Decomposes complex multi-topic queries into lists of sub-queries."""
+
+    @abstractmethod
+    def decompose(self, query: str) -> List[str]:
+        """Splits complex queries into independent query strings."""
+        pass
+
+
+class ICrossEncoderReranker(ABC):
+    """Performs deep cross-encoder re-scoring of candidate chunks."""
+
+    @abstractmethod
+    async def rerank(
+        self, query: str, chunks: List[Dict[str, Any]], limit: int
+    ) -> List[Dict[str, Any]]:
+        """Re-scores chunks using a cross-encoder model."""
+        pass
+
+
+class ISemanticCache(ABC):
+    """Manages semantic and exact result caching for vector queries."""
+
+    @abstractmethod
+    def get(
+        self, query: str, query_vector: List[float]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Looks up matching exact query or semantic hits (cosine similarity >= 0.96)."""
+        pass
+
+    @abstractmethod
+    def set(
+        self, query: str, query_vector: List[float], results: List[Dict[str, Any]]
+    ) -> None:
+        """Stores query and vector key paired with search result list payload."""
+        pass
+
+    @abstractmethod
+    def invalidate(self) -> None:
+        """Clears all cached records."""
+        pass
+
+
+class ICollectionManager(ABC):
+    """Manages semantic collection workspaces, isolates fields, and configures model migrations."""
+
+    @abstractmethod
+    async def create_collection(
+        self, collection_name: str, config: Dict[str, Any]
+    ) -> None:
+        """Spawns an isolated collection partition."""
+        pass
+
+    @abstractmethod
+    async def delete_collection(self, collection_name: str) -> None:
+        """Purges collection space."""
+        pass
+
+    @abstractmethod
+    async def migrate_collection(
+        self, source: str, target: str, transform_provider: IEmbeddingProvider
+    ) -> None:
+        """Re-embeds and transfers segments to target collections during model upgrades."""
         pass
