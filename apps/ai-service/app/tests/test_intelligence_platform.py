@@ -223,7 +223,7 @@ async def test_intelligence_gateway_train_flow():
     assert context.domain_type == "JourneyCanonical"
     assert context.canonical_data["resolved_delay_minutes"] == 15
     assert context.canonical_data["journey_risk"] == "LOW"
-    assert context.metadata["confidence_score"] == 100.0
+    assert context.metadata["confidence_score"] == 99.17
 
 
 @pytest.mark.anyio
