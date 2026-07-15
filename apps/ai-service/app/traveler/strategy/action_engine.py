@@ -9,6 +9,7 @@ look-ups for travel advisory personalisation.
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+from app.traveler.interfaces.contracts import IActionEngine
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +162,7 @@ class TravelerStrategyRegistry:
 # ---------------------------------------------------------------------------
 
 
-class ActionEngine:
+class ActionEngine(IActionEngine):
     """Catalog-driven action selector (Planning §2)."""
 
     def __init__(self, strategy_registry: Optional[TravelerStrategyRegistry] = None):
