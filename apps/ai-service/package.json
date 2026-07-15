@@ -1,0 +1,10 @@
+{
+  "name": "ai-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "lint": "node -e \"const { execSync } = require('child_process'); const cmd = process.platform === 'win32' ? 'venv\\\\Scripts\\\\ruff check .' : './venv/bin/ruff check .'; try { execSync(cmd, { stdio: 'inherit' }); } catch (e) { process.exit(1); }\"",
+    "format": "node -e \"const { execSync } = require('child_process'); const cmd = process.platform === 'win32' ? 'venv\\\\Scripts\\\\ruff format .' : './venv/bin/ruff format .'; try { execSync(cmd, { stdio: 'inherit' }); } catch (e) { process.exit(1); }\"",
+    "test": "node -e \"const { execSync } = require('child_process'); const cmd = process.platform === 'win32' ? 'venv\\\\Scripts\\\\python -m pytest' : './venv/bin/python -m pytest'; try { execSync(cmd, { stdio: 'inherit' }); } catch (e) { process.exit(1); }\""
+  }
+}

@@ -8,8 +8,11 @@ import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { PrismaService } from './prisma.service';
 
-
-function checkTcpConnection(host: string, port: number, timeoutMs = 2000): Promise<boolean> {
+function checkTcpConnection(
+  host: string,
+  port: number,
+  timeoutMs = 2000,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new Socket();
     let resolved = false;
@@ -57,7 +60,9 @@ async function bootstrap() {
       redisHost = parsed.hostname;
       redisPort = parsed.port ? parseInt(parsed.port, 10) : 6379;
     } catch {
-      const match = redisUrl.match(/redis:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/);
+      const match = redisUrl.match(
+        /redis:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
+      );
       if (match) {
         redisHost = match[1];
         if (match[2]) {
