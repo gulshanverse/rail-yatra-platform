@@ -119,7 +119,6 @@ def test_model_registry_and_router():
     route_fast = router.select_route({"tokens": 1000}, policy="latency_optimized")
     assert route_fast == "local-llama"  # local has the lowest average latency
 
-
     # Test unavailable models
     registry.update_health("local-llama", "Unavailable")
     route_fallback = router.select_route({"tokens": 1000}, policy="cost_optimized")
