@@ -1,6 +1,6 @@
 # app/journey/repositories/interfaces.py
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 
 class IJourneyRepository(ABC):

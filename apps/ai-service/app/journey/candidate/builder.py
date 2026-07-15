@@ -4,7 +4,6 @@ from typing import List, Any
 from datetime import datetime, timedelta
 from app.journey.interfaces.contracts import IJourneyCandidateBuilder
 from app.journey.dto.models import JourneyCandidateDTO, SegmentDTO, TransferDTO
-from app.journey.config.registry import get_policy
 
 
 class JourneyCandidateBuilder(IJourneyCandidateBuilder):

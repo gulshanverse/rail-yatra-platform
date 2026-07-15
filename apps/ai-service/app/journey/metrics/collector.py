@@ -1,6 +1,6 @@
 # app/journey/metrics/collector.py
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 from app.journey.interfaces.contracts import IMetricsEngine
 
 logger = logging.getLogger("ai-service.journey.metrics")

@@ -4,7 +4,7 @@ import uuid
 from typing import List, Dict
 from app.journey.interfaces.contracts import IRankingEngine
 from app.journey.dto.models import RecommendedJourneyDTO, JourneyRecommendationDTO
-from app.journey.config.registry import get_policy, is_feature_enabled
+from app.journey.config.registry import is_feature_enabled
 
 
 class RankingEngine(IRankingEngine):

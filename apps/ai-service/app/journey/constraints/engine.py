@@ -14,7 +14,6 @@ class ConstraintEngine(IConstraintEngine):
         max_budget = traveler_profile.get("max_budget", 99999.0)
         wheelchair_required = traveler_profile.get("wheelchair_required", False)
         max_transfers = traveler_profile.get("max_transfers", 3)
-        medical_priority = traveler_profile.get("medical_priority", False)
 
         for candidate in candidates:
             # 1. Transfers constraint

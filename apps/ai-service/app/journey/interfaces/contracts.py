@@ -1,6 +1,6 @@
 # app/journey/interfaces/contracts.py
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from app.journey.dto.models import (
     JourneyQueryDTO,
     JourneyRecommendationDTO,
@@ -10,7 +10,6 @@ from app.journey.dto.models import (
     JourneyExplanationDTO,
     RecommendedJourneyDTO
 )
-from app.intelligence.models import AIReadyContext
 
 
 class IJourneyGateway(ABC):
