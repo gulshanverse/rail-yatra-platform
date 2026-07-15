@@ -130,6 +130,27 @@ from app.knowledge.orchestration_reasoning import (
     HumanApprovalInterfaces,
     ExecutionEngine,
 )
+from app.knowledge.operations import (
+    EnterpriseAIAssetCatalog,
+    DatasetRegistry,
+    ModelRegistry,
+    ModelRouter,
+    ContinuousEvaluationEngine,
+    HumanFeedbackPlatform,
+    ContinuousLearningPlatform,
+    PromptEvolutionPlatform,
+    ExperimentationPlatform,
+    AIQualityGates,
+    AIReleaseManager,
+    AIGovernanceCenter,
+    ProductionObservability,
+    EnterpriseAnalytics,
+    CostOptimizationPlatform,
+    ReliabilityEngineering,
+    SecurityMonitoring,
+    OperationsConsole,
+)
+
 
 __all__ = [
     # Interfaces
@@ -246,4 +267,23 @@ __all__ = [
     "ToolSafetyLayer",
     "HumanApprovalInterfaces",
     "ExecutionEngine",
+    # AI Quality, Learning, Governance & Operations (Milestone 4.5)
+    "EnterpriseAIAssetCatalog",
+    "DatasetRegistry",
+    "ModelRegistry",
+    "ModelRouter",
+    "ContinuousEvaluationEngine",
+    "HumanFeedbackPlatform",
+    "ContinuousLearningPlatform",
+    "PromptEvolutionPlatform",
+    "ExperimentationPlatform",
+    "AIQualityGates",
+    "AIReleaseManager",
+    "AIGovernanceCenter",
+    "ProductionObservability",
+    "EnterpriseAnalytics",
+    "CostOptimizationPlatform",
+    "ReliabilityEngineering",
+    "SecurityMonitoring",
+    "OperationsConsole",
 ]
