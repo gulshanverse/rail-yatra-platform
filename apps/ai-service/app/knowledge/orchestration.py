@@ -409,7 +409,7 @@ class GroundingValidator:
         """Computes a grounding score (0.0 to 1.0) indicating factual correctness."""
         res_clean = re.sub(r"[^\w\s]", "", response.lower())
         ctx_clean = re.sub(r"[^\w\s]", "", context_text.lower())
-        
+
         res_words = set(res_clean.split())
         ctx_words = set(ctx_clean.split())
 
