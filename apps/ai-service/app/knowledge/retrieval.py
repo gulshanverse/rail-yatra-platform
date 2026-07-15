@@ -249,8 +249,10 @@ class RetrievalCoordinator(IRetrievalCoordinator):
 
             # 7. Execute Retrieval Fallback Sequence
             policy_config = {"policy_type": policy_name}
-            policy_type, filters = self.policy_engine.apply_policy(context_query, policy_config)
-            
+            policy_type, filters = self.policy_engine.apply_policy(
+                context_query, policy_config
+            )
+
             results = []
             applied_policy = policy_type
             if applied_policy not in ["semantic", "hybrid", "keyword", "faq"]:
@@ -286,7 +288,9 @@ class RetrievalCoordinator(IRetrievalCoordinator):
 
             # Fallback Stage 3: Keyword search
             if applied_policy == "keyword":
-                results = await self._execute_lexical_search(context_query, filters, limit)
+                results = await self._execute_lexical_search(
+                    context_query, filters, limit
+                )
                 if not results:
                     logger.warning(
                         "Keyword search returned empty. Falling back to FAQ search."

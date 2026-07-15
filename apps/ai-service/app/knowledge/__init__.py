@@ -88,6 +88,24 @@ from app.knowledge.cache import (
 from app.knowledge.collection import (
     CollectionManager,
 )
+from app.knowledge.orchestration import (
+    ConversationContextLayer,
+    MemoryFusionEngine,
+    ContextConflictResolutionEngine,
+    TokenBudgetManager,
+    ContextCompressionEngine,
+    PromptRegistry,
+    PromptBuilder,
+    EnterpriseGuardrailsLayer,
+    LLMGateway,
+    StreamingResponseController,
+    GroundingValidator,
+    CitationEngine,
+    ResponseConfidenceEngine,
+    ResponsePolicyEngine,
+    ResponsePostProcessor,
+    TraceabilityManager,
+)
 
 
 __all__ = [
@@ -165,4 +183,21 @@ __all__ = [
     "ICrossEncoderReranker",
     "ISemanticCache",
     "ICollectionManager",
+    # Orchestration Components
+    "ConversationContextLayer",
+    "MemoryFusionEngine",
+    "ContextConflictResolutionEngine",
+    "TokenBudgetManager",
+    "ContextCompressionEngine",
+    "PromptRegistry",
+    "PromptBuilder",
+    "EnterpriseGuardrailsLayer",
+    "LLMGateway",
+    "StreamingResponseController",
+    "GroundingValidator",
+    "CitationEngine",
+    "ResponseConfidenceEngine",
+    "ResponsePolicyEngine",
+    "ResponsePostProcessor",
+    "TraceabilityManager",
 ]
