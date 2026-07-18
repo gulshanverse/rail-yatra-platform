@@ -22,7 +22,12 @@ from app.personalization.dto.models import (
     TravelerBehaviorDTO,
     LearningObservationDTO,
     PreferenceConfidenceDTO,
+    TravelerPersonalizationContext,
 )
+from app.personalization.cache import CacheManager
+from app.personalization.preferences import PreferenceEngine
+from app.personalization.behavior import BehaviorEngine
+from app.personalization.observations import ObservationEngine
 from app.personalization.validators import (
     ProfileValidator,
     ConsentValidator,
@@ -230,6 +235,186 @@ class TestPersonalizationBatch1(unittest.TestCase):
                 await self.factory.build("traveler-3", "corr-300")
 
         self.loop.run_until_complete(run_test())
+
+
+class TestPersonalizationBatch2(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile_repo = InMemoryProfileRepository()
+        self.preference_repo = InMemoryPreferenceRepository()
+        self.behavior_repo = InMemoryBehaviorRepository()
+        self.observation_repo = InMemoryObservationRepository()
+        self.confidence_repo = InMemoryConfidenceRepository()
+        self.cache_repo = InMemoryCacheRepository()
+
+        self.cache_manager = CacheManager(self.cache_repo)
+        self.pref_engine = PreferenceEngine(self.preference_repo, self.cache_manager)
+        self.behavior_engine = BehaviorEngine(self.behavior_repo, self.observation_repo)
+        self.observation_engine = ObservationEngine(self.observation_repo)
+
+    def test_cache_manager(self) -> None:
+        self.cache_manager.put("test-cache", "key-1", "value-1", 60)
+        self.assertEqual(self.cache_manager.get("test-cache", "key-1"), "value-1")
+
+        self.cache_manager.invalidate("test-cache", "key-1")
+        self.assertIsNone(self.cache_manager.get("test-cache", "key-1"))
+
+        self.cache_manager.put("test-cache", "key-2", "value-2", 60)
+        self.cache_manager.put("other-cache", "key-2", "value-other", 60)
+        self.cache_manager.invalidate_all("test-cache")
+        self.assertIsNone(self.cache_manager.get("test-cache", "key-2"))
+        self.assertEqual(self.cache_manager.get("other-cache", "key-2"), "value-other")
+
+    def test_preference_engine(self) -> None:
+        # Resolve from empty DB
+        ctx = TravelerPersonalizationContext(
+            traveler_id="traveler-b2-1",
+            version=1,
+            correlation_id="corr-b2",
+            timestamp=datetime.utcnow(),
+            persona="GENERAL",
+            explicit_preferences={},
+            implicit_preferences={},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-1",
+            telemetry={},
+        )
+        prefs = self.pref_engine.resolve(ctx)
+        self.assertEqual(len(prefs), 0)
+
+        # Save and resolve
+        pref1 = TravelerPreferenceDTO(
+            preference_id="pref-b2-1",
+            traveler_profile_id="traveler-b2-1",
+            category="COMFORT",
+            preference_key="seat_preference",
+            value="lower",
+            type="EXPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={},
+        )
+        pref2 = TravelerPreferenceDTO(
+            preference_id="pref-b2-2",
+            traveler_profile_id="traveler-b2-1",
+            category="DIETARY",
+            preference_key="meal_preference",
+            value="veg",
+            type="EXPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={},
+        )
+        self.pref_engine.update("traveler-b2-1", pref1)
+        self.pref_engine.update("traveler-b2-1", pref2)
+
+        resolved_prefs = self.pref_engine.resolve(ctx)
+        self.assertEqual(len(resolved_prefs), 2)
+
+        # Test partial reset (by category COMFORT)
+        self.pref_engine.reset("traveler-b2-1", "COMFORT")
+        resolved_after_partial = self.pref_engine.resolve(ctx)
+        # Should only have DIETARY preference remaining
+        self.assertEqual(len(resolved_after_partial), 1)
+        self.assertEqual(resolved_after_partial[0].category, "DIETARY")
+
+        # Test full reset
+        self.pref_engine.reset("traveler-b2-1")
+        self.assertEqual(len(self.pref_engine.resolve(ctx)), 0)
+
+    def test_behavior_engine_and_pattern_detection(self) -> None:
+        ctx = TravelerPersonalizationContext(
+            traveler_id="traveler-b2-2",
+            version=1,
+            correlation_id="corr-b2",
+            timestamp=datetime.utcnow(),
+            persona="GENERAL",
+            explicit_preferences={},
+            implicit_preferences={},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-2",
+            telemetry={},
+        )
+        # Test evaluate default DTO
+        behavior = self.behavior_engine.evaluate(ctx)
+        self.assertEqual(behavior.traveler_profile_id, "traveler-b2-2")
+        self.assertEqual(len(behavior.active_patterns), 0)
+
+        # Save and evaluate behavior DTO
+        behavior.active_patterns = [{"pattern": "commuter"}]
+        self.behavior_repo.save(behavior)
+        behavior_res = self.behavior_engine.evaluate(ctx)
+        self.assertEqual(len(behavior_res.active_patterns), 1)
+
+        # Ingest observations to trigger pattern detection
+        # 1. 3 searches for "SL" -> budget_seeker
+        self.observation_engine.ingest("traveler-b2-2", "SEARCH", "SL")
+        self.observation_engine.ingest("traveler-b2-2", "SEARCH", "SL")
+        self.observation_engine.ingest("traveler-b2-2", "SEARCH", "SL")
+
+        # 2. 3 bookings on weekdays -> weekly_commuter
+        # Let's create weekday timestamp (Monday is weekday 0)
+        weekday_dt = datetime.utcnow() - timedelta(days=1)
+        while weekday_dt.weekday() >= 5:
+            weekday_dt -= timedelta(days=1)
+        obs_c1 = LearningObservationDTO(
+            observation_id="obs-c1",
+            traveler_id="traveler-b2-2",
+            action_type="BOOKING",
+            value="NDLS-BPL",
+            timestamp=weekday_dt,
+            ttl_expiry=weekday_dt + timedelta(days=30),
+            metadata={},
+        )
+        obs_c2 = LearningObservationDTO(
+            observation_id="obs-c2",
+            traveler_id="traveler-b2-2",
+            action_type="BOOKING",
+            value="NDLS-BPL",
+            timestamp=weekday_dt,
+            ttl_expiry=weekday_dt + timedelta(days=30),
+            metadata={},
+        )
+        obs_c3 = LearningObservationDTO(
+            observation_id="obs-c3",
+            traveler_id="traveler-b2-2",
+            action_type="BOOKING",
+            value="NDLS-BPL",
+            timestamp=weekday_dt,
+            ttl_expiry=weekday_dt + timedelta(days=30),
+            metadata={},
+        )
+        self.observation_repo.save(obs_c1)
+        self.observation_repo.save(obs_c2)
+        self.observation_repo.save(obs_c3)
+
+        detected = self.behavior_engine.detect_patterns("traveler-b2-2")
+        detected_names = [p["pattern"] for p in detected]
+        self.assertIn("budget_seeker", detected_names)
+        self.assertIn("weekly_commuter", detected_names)
+
+    def test_observation_engine_batch_ingest(self) -> None:
+        events = [
+            {"traveler_id": "traveler-b2-3", "action_type": "SEARCH", "value": "2A"},
+            {"traveler_id": "traveler-b2-3", "action_type": "SEARCH", "value": "3A"},
+            {"traveler_id": "", "action_type": "SEARCH", "value": "1A"},  # Invalid
+        ]
+        results = self.observation_engine.batch_ingest(events)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].traveler_id, "traveler-b2-3")
+        self.assertEqual(results[0].action_type, "SEARCH")
+        self.assertEqual(results[0].value, "2A")
+        # Check generated id prefix
+        self.assertTrue(results[0].observation_id.startswith("obs-"))
 
 
 if __name__ == "__main__":
