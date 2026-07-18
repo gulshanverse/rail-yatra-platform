@@ -25,6 +25,7 @@ from app.personalization.dto.models import (
     TravelerPersonalizationContext,
     ReasonCodeDTO,
     PreferenceEvidenceDTO,
+    PreferenceAuditDTO,
 )
 from app.personalization.cache import CacheManager
 from app.personalization.preferences import PreferenceEngine
@@ -38,6 +39,12 @@ from app.personalization.confidence import ConfidenceEngine
 from app.personalization.conflict import ConflictResolutionEngine
 from app.personalization.inheritance import PreferenceInheritanceEngine
 from app.personalization.dependency import PreferenceDependencyEngine
+from app.personalization.audit import AuditEngine
+from app.personalization.metrics import MetricsEngine
+from app.personalization.health import HealthEngine
+from app.personalization.pipeline import PipelineOrchestrator
+from app.personalization.coordinator import PersonalizationCoordinator
+from app.personalization.gateway import PersonalizationGateway
 from app.personalization.validators import (
     ProfileValidator,
     ConsentValidator,
@@ -658,6 +665,159 @@ class TestPersonalizationBatch4(unittest.TestCase):
         adapt_booking = self.adaptation_engine.adapt(rec_booking, ctx)
         self.assertEqual(adapt_booking.adapted_fields.get("seat_preference"), "lower")
         self.assertEqual(adapt_booking.reason_code, "PREF_IMPLICIT_SEAT")
+
+
+class TestPersonalizationBatch5(unittest.TestCase):
+    def setUp(self) -> None:
+        self.profile_repo = InMemoryProfileRepository()
+        self.preference_repo = InMemoryPreferenceRepository()
+        self.behavior_repo = InMemoryBehaviorRepository()
+        self.confidence_repo = InMemoryConfidenceRepository()
+        self.audit_repo = InMemoryAuditRepository()
+        self.metrics_repo = InMemoryMetricsRepository()
+        self.observation_repo = InMemoryObservationRepository()
+
+        self.profile_validator = ProfileValidator(self.profile_repo)
+        self.consent_validator = ConsentValidator(self.profile_repo)
+        self.context_factory = TravelerPersonalizationContextFactory(
+            profile_repository=self.profile_repo,
+            preference_repository=self.preference_repo,
+            behavior_repository=self.behavior_repo,
+            confidence_repository=self.confidence_repo,
+            profile_validator=self.profile_validator,
+            consent_validator=self.consent_validator,
+        )
+
+        self.reason_code_engine = ReasonCodeEngine()
+        self.explanation_engine = ExplanationEngine()
+        self.adaptation_engine = RecommendationAdaptationEngine(self.reason_code_engine)
+        self.audit_engine = AuditEngine(self.audit_repo)
+        self.metrics_engine = MetricsEngine(self.metrics_repo)
+        self.health_engine = HealthEngine()
+        self.observation_engine = ObservationEngine(self.observation_repo)
+
+        self.pipeline_orchestrator = PipelineOrchestrator(
+            adaptation_engine=self.adaptation_engine,
+            reason_code_engine=self.reason_code_engine,
+            explanation_engine=self.explanation_engine,
+            audit_engine=self.audit_engine,
+            metrics_engine=self.metrics_engine,
+        )
+
+        self.coordinator = PersonalizationCoordinator(
+            context_factory=self.context_factory,
+            pipeline_orchestrator=self.pipeline_orchestrator,
+        )
+
+        self.gateway = PersonalizationGateway(
+            coordinator=self.coordinator,
+            observation_engine=self.observation_engine,
+            health_engine=self.health_engine,
+        )
+
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+    def tearDown(self) -> None:
+        self.loop.close()
+
+    def test_audit_engine(self) -> None:
+        audit = PreferenceAuditDTO(
+            audit_id="aud-test-1",
+            correlation_id="corr-1",
+            timestamp=datetime.utcnow(),
+            traveler_id="traveler-1",
+            action="TEST",
+            change_log={},
+            policy_applied="test",
+            cryptographic_hash="sig-test",
+        )
+        self.audit_engine.log(audit)
+        self.assertTrue(self.audit_engine.verify("aud-test-1"))
+        self.assertFalse(self.audit_engine.verify("non-existent"))
+
+    def test_metrics_engine(self) -> None:
+        self.metrics_engine.increment("test.metric", {"tag": "val"})
+        self.metrics_engine.observe("test.latency", 45.2, {"tag": "val"})
+        self.assertEqual(len(self.metrics_repo._metrics), 2)
+
+    def test_health_engine(self) -> None:
+        res = self.health_engine.check()
+        self.assertEqual(res["status"], "UP")
+        self.assertEqual(self.health_engine.check_subsystem("sub")["status"], "UP")
+
+    def test_gateway_flow(self) -> None:
+        async def run_test() -> None:
+            self.profile_repo.create_profile("traveler-b5-1", "hash-b5")
+
+            pref = TravelerPreferenceDTO(
+                preference_id="pref-b5-1",
+                traveler_profile_id="traveler-b5-1",
+                category="COMFORT",
+                preference_key="preferred_class",
+                value="3A",
+                type="EXPLICIT",
+                version=1,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                metadata={},
+            )
+            self.preference_repo.save(pref)
+
+            await self.gateway.ingest_observation(
+                "traveler-b5-1", "SEARCH", "3A", "corr-b5"
+            )
+            self.assertEqual(len(self.observation_repo._observations), 1)
+
+            rec_dto = {"id": "rec-99", "scenario": "JOURNEY_LISTING"}
+            result = await self.gateway.personalize(
+                traveler_id="traveler-b5-1",
+                request_type="JOURNEY_LISTING",
+                raw_dto=rec_dto,
+                correlation_id="corr-b5",
+            )
+            self.assertEqual(result.context.traveler_id, "traveler-b5-1")
+            self.assertEqual(len(result.explanations), 1)
+            self.assertEqual(
+                result.explanations[0]["reason_code"], "PREF_EXPLICIT_CLASS"
+            )
+
+            health = self.gateway.health_check()
+            self.assertEqual(health["status"], "UP")
+
+        self.loop.run_until_complete(run_test())
+
+    def test_coordinator_graceful_fallback(self) -> None:
+        async def run_test() -> None:
+            rec_dto = {"id": "rec-99", "scenario": "JOURNEY_LISTING"}
+            result = await self.gateway.personalize(
+                traveler_id="traveler-non-existent",
+                request_type="JOURNEY_LISTING",
+                raw_dto=rec_dto,
+                correlation_id="corr-b5-err",
+            )
+            self.assertEqual(result.context.traveler_id, "traveler-non-existent")
+            self.assertEqual(result.explanations[0]["reason_code"], "PREF_DEFAULT")
+            self.assertEqual(result.audit_token, "degraded-token")
+
+            self.profile_repo.create_profile("traveler-revoked", "hash-revoked")
+            prof = self.profile_repo.get_by_traveler_id("traveler-revoked")
+            prof["consent_granted"] = False
+            prof["metadata"]["consent_granted"] = False
+
+            result_revoked = await self.gateway.personalize(
+                traveler_id="traveler-revoked",
+                request_type="JOURNEY_LISTING",
+                raw_dto=rec_dto,
+                correlation_id="corr-b5-rev",
+            )
+            self.assertEqual(result_revoked.context.traveler_id, "traveler-revoked")
+            self.assertEqual(
+                result_revoked.explanations[0]["reason_code"], "PREF_DEFAULT"
+            )
+            self.assertEqual(result_revoked.audit_token, "degraded-token")
+
+        self.loop.run_until_complete(run_test())
 
 
 if __name__ == "__main__":
