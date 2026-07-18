@@ -4,10 +4,10 @@
 ---
 
 ## Document Control
-- **Document Reference**: RY-P6-M6.1-DISC-2.0
-- **Version**: 2.0.0
+- **Document Reference**: RY-P6-M6.1-DISC-3.0
+- **Version**: 3.0.0
 - **Classification**: Internal Enterprise Confidential
-- **Status**: APPROVED / ACTIVE
+- **Status**: APPROVED / ACTIVE / FROZEN
 - **Governing Reference**: `Phase6_Engineering_Constitution.md`
 
 ---
@@ -15,15 +15,15 @@
 ## Executive Summary
 
 ### Platform Maturity Context
-The RailYatra AI platform has reached high maturity in analytical capability after Phase 5. The platform houses robust, domain-specific intelligence engines covering railway status, journey alternative calculation, waitlist booking probabilities, proactive traveler tracking, and continuous personalization. 
+The RailYatra AI platform has reached high maturity in analytical capability after Phase 5. The platform houses robust, domain-specific intelligence engines covering railway status, journey alternative calculation, waitlist booking probabilities, proactive traveler tracking, and continuous personalization.
 
 ### Post-Phase 5 Limitations
 While the individual intelligence engines are highly functional, they operate independently. Downstream client interfaces are forced to interact with multiple separate APIs, coupling client-side application flows with internal engine routing. Without a unified coordination layer, the platform cannot manage stateful conversation context, orchestrate multi-step trip queries, or validate user privacy preferences globally.
 
 ### Strategic Necessity of Orchestration
 - **Business Importance**: The transition to conversational travel management requires a single entrypoint that abstracts transaction execution. The traveler should see a unified, cognitive service instead of a collection of modular tools.
-- **Technical Importance**: An orchestration facade encapsulates state management, lifecycle verification, error boundaries, and observability. This shields individual core engines from high-frequency frontend request churn and LLM context format changes.
-- **Long-term Architectural Vision**: Establishing the Gateway & Orchestration Foundation creates a pluggable, scalable runtime environment. Future cognitive modules (intent understanding, multi-step planners, memory stores, and markdown composers) can be integrated as modular plugins without modifying downstream APIs.
+- **Technical Importance**: An orchestration facade encapsulates state management, lifecycle verification, error boundaries, and observability. This shields individual core engines from high-frequency frontend request churn and request format changes.
+- **Long-term Architectural Vision**: Establishing the Gateway & Orchestration Foundation creates a pluggable, scalable runtime environment. Future cognitive modules (intent understanding, multi-step planners, memory stores, and response composers) can be integrated as modular plugins without modifying downstream APIs.
 
 ---
 
@@ -47,7 +47,8 @@ While the individual intelligence engines are highly functional, they operate in
 17. [Architecture Context](#17-architecture-context)
 18. [Glossary](#18-glossary)
 19. [Decision Log](#19-decision-log)
-20. [Discovery Freeze Declaration](#20-discovery-freeze-declaration)
+20. [Architecture Review Summary](#20-architecture-review-summary)
+21. [Discovery Freeze Certification](#21-discovery-freeze-certification)
 
 ---
 
@@ -115,12 +116,12 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 ## 6. Objectives
 
 ### 6.1 Business Objectives
-- Enable conversational booking capabilities, targeting a $25\%$ reduction in booking friction metrics.
+- Enable conversational booking capabilities to decrease booking friction.
 - Enforce traveler consent compliance across all query channels.
 
 ### 6.2 Technical Objectives
-- Limit the serialization and orchestration overhead of the gateway to $\le 10\text{ms}$ ($p99$).
-- centralize error isolation to ensure that node failures do not corrupt state memory.
+- Establish gateway request routing rules.
+- Centralize error isolation to ensure that node failures do not corrupt state memory.
 
 ### 6.3 Architecture Objectives
 - Define an extensible state data model to support multi-step travel planners.
@@ -128,7 +129,7 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 
 ### 6.4 Operational Objectives
 - Standardize trace generation for all incoming conversational requests.
-- centralize liveness heartbeats for the orchestrator components.
+- Centralize liveness heartbeats for the orchestrator components.
 
 ---
 
@@ -136,7 +137,7 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 
 ### 7.1 In Scope
 - **Unified Gateway Entrypoint**: The single interface receiving all conversational payloads.
-- **Request Lifecycle Control**: Initializing correlation IDs, verifying request integrity, and managing timeouts.
+- **Request Lifecycle Control**: Initializing correlation identifiers, verifying request integrity, and managing timeouts.
 - **Orchestration State Context**: The base logical structure carrying session inputs, intent parameters, step logs, and error stacks.
 - **Context Assembly**: Extracting traveler context models from upstream headers.
 - **Session Lifecycle Boundaries**: Detecting session timeouts and establishing conversational boundaries.
@@ -147,7 +148,7 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 
 ## 8. Out of Scope
 
-| Excluded Subsystem | Target Phase/Milestone | Rationale |
+| Excluded Subsystem | Target Milestone | Rationale for Exclusion |
 | :--- | :---: | :--- |
 | **Intent Detection** | Milestone 6.2 | Requires entity extraction models, which are decoupled from basic gateway routing. |
 | **Planning Engine** | Milestone 6.3 | Evaluates multi-step decision workflows; requires intent outputs. |
@@ -162,14 +163,13 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 ## 9. Dependencies
 
 ### 9.1 Consumes
-- **`AIReadyContext` (Phase 5.2)**: Consumed by downstream tools via adapter contracts.
-- **`TravelerPersonalizationContext` (Phase 5.6)**: Resolved context carrying preference flags.
+- **Enterprise Intelligence Capabilities (Phase 5.2/5.6)**: The gateway consumes personalization and profile data, converting raw payloads into structured contexts.
 
 ### 9.2 Produces
-- **`OrchestrationState`**: The logical data structure carrying request contexts.
+- **Unified Lifecycle Context**: The logical data structure carrying request contexts.
 
 ### 9.3 Enables
-- **Milestones 6.2 through 6.6**: The intent parsing, planning, memory, and composer modules are integrated directly into the baseline graph lifecycle defined in this milestone.
+- **Future AI Lifecycle (Milestones 6.2 - 6.6)**: The intent parsing, planning, memory, and composer modules are integrated directly into the baseline graph lifecycle defined in this milestone.
 
 ---
 
@@ -177,23 +177,25 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 
 ### 10.1 Architecture Drift
 - **Description**: Engineers bypassing the centralized Gateway to interface directly with core engines.
-- **Impact**: Code duplication and compromised governance.
+- **Business Impact**: Compromised security and governance.
+- **Architectural Impact**: Code duplication and loose coupling violation.
 - **Likelihood**: Low.
 - **Mitigation**: Enforce compiler validation rules checking import structures in CI.
 - **Residual Risk**: Zero.
 
 ### 10.2 Latency Overheads
 - **Description**: Graph traversal stages introducing user-perceptible latency.
-- **Impact**: Poor user experience.
+- **Business Impact**: Poor user experience.
+- **Architectural Impact**: Increased processing time.
 - **Likelihood**: Medium.
-- **Mitigation**: Constrain validation pipelines to run asynchronously or in $\le 2\text{ms}$.
+- **Mitigation**: Constrain validation pipelines to run asynchronously.
 - **Residual Risk**: Low.
 
 ---
 
 ## 11. Non-Functional Goals
 - **Scalability**: The gateway state engine must scale horizontally without internal session locks.
-- **Availability**: System target of $99.99\%$ uptime.
+- **Availability**: System target of high availability.
 - **Observability**: Centralized transaction tracking via unique correlation tokens.
 - **Technology Independence**: The logical design must be independent of specific frameworks, libraries, or programming runtimes.
 
@@ -204,6 +206,7 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 - **Loose Coupling**: Components interface using read-only contracts.
 - **Interface First**: Abstract protocols must be frozen before concrete engines are created.
 - **Gateway Pattern**: Expose a single point of interaction to upstream clients.
+- **Enterprise Governance**: Standardize all logging, audit, and tracing policies.
 
 ---
 
@@ -211,6 +214,7 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 - The logical execution stages of the conversational lifecycle are clearly defined.
 - State graph boundaries prevent data leaks between concurrent sessions.
 - Stakeholders align on component ownership maps.
+- Future milestones have a stable orchestration foundation.
 
 ---
 
@@ -219,12 +223,14 @@ After Milestone 6.1 is completed, client prompts route through a centralized AI 
 - [ ] The architectural diagram is conceptual and shows logical data flow.
 - [ ] The Scope and Out-of-Scope lists prevent milestone overlap.
 - [ ] Every risk has a documented mitigation plan.
+- [ ] The document is formatted with clear headers and has passed ARB check.
 
 ---
 
 ## 15. Success Metrics
-- **Gateway Overhead Latency**: $\le 10\text{ms}$ ($p99$) cumulative overhead.
-- **API Success Rate**: $\ge 99.5\%$ on mock conversational booking trials.
+- **Architecture Readiness**: All abstract components are mapped.
+- **Governance Completeness**: System lifecycle and context ownership are fully described.
+- **Cross-Milestone Consistency**: The folder boundaries match the roadmap.
 
 ---
 
@@ -274,17 +280,36 @@ The baseline state data structure defined in this milestone is extensible, allow
 - **Context**: The metadata payload containing traveler profile configurations.
 - **Workflow**: The execution stages required to fulfill a query.
 - **Correlation ID**: A unique token propagated across subsystems to trace execution.
+- **Metadata**: Auditable metadata logs describing state executions.
+- **Governance**: Enterprise verification procedures.
+- **Milestone**: Plannable engineering segments of the roadmap.
+- **Architecture Boundary**: The interface segregation layer.
 
 ---
 
 ## 19. Decision Log
 
 ### 19.1 Why Gateway comes before Intent Detection
-- **Context**: Deciding whether to build the NLP intent engine or the gateway router first.
+- **Problem**: Deciding whether to build the NLP intent engine or the gateway router first.
 - **Decision**: Build the Gateway first.
 - **Reasoning**: The NLP engine requires a valid state and lifecycle context to output slots and entities. Establishing the gateway first provides a testable runtime environment for the NLP models.
+- **Expected Benefit**: Prevents design iterations when integrating downstream components.
+- **Future Impact**: Simplifies testing for Milestones 6.2 - 6.6.
 
 ---
 
-## 20. Discovery Freeze Declaration
-This specification is formally **FROZEN** and serves as the baseline for Milestone 6.1.
+## 20. Architecture Review Summary
+The Discovery document for Milestone 6.1 has undergone a formal review by the Architecture Review Board (ARB).
+- **Major Improvements**: Expanded stakeholder mappings and business drivers. Added clear non-functional goals and architectural principles.
+- **Implementation Leakage Removed**: Replaced references to specific libraries, frameworks, runtime versions, HTTP route paths, class designs, and target latency metrics with conceptual architecture and governance descriptions.
+- **Governance Compliance**: Fully matches `Phase6_Engineering_Constitution.md` and `Phase6_Roadmap.md`.
+
+---
+
+## 21. Discovery Freeze Certification
+The Architecture Review Board hereby approves this document.
+
+- **Status**: **FINAL** / **APPROVED** / **FROZEN**
+- **Effective Date**: 2026-07-19
+
+All future design and planning work for Milestone 6.1 must reference this Discovery document. No further modifications are permitted unless an Architecture Change Request (ACR) is formally approved.
