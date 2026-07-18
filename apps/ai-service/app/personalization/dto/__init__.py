@@ -1,0 +1,38 @@
+# app/personalization/dto/__init__.py
+from app.personalization.dto.models import (
+    TravelerPreferenceDTO,
+    TravelerBehaviorDTO,
+    LearningObservationDTO,
+    LearningDecisionDTO,
+    PreferenceConfidenceDTO,
+    PreferenceEvidenceDTO,
+    ReasonCodeDTO,
+    RecommendationAdaptationDTO,
+    PersonalizedJourneyDTO,
+    PersonalizedBookingDTO,
+    PersonalizedGuidanceDTO,
+    PersonalizedRecoveryDTO,
+    PreferenceAuditDTO,
+    PreferenceMetricsDTO,
+    TravelerPersonalizationContext,
+    AIReadyPersonalizationContext,
+)
+
+__all__ = [
+    "TravelerPreferenceDTO",
+    "TravelerBehaviorDTO",
+    "LearningObservationDTO",
+    "LearningDecisionDTO",
+    "PreferenceConfidenceDTO",
+    "PreferenceEvidenceDTO",
+    "ReasonCodeDTO",
+    "RecommendationAdaptationDTO",
+    "PersonalizedJourneyDTO",
+    "PersonalizedBookingDTO",
+    "PersonalizedGuidanceDTO",
+    "PersonalizedRecoveryDTO",
+    "PreferenceAuditDTO",
+    "PreferenceMetricsDTO",
+    "TravelerPersonalizationContext",
+    "AIReadyPersonalizationContext",
+]
