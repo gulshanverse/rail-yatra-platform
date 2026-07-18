@@ -1,4 +1,4 @@
-from typing import Dict, Any, AsyncIterator, Protocol, runtime_checkable
+from typing import Dict, Any, AsyncIterator, Protocol, runtime_checkable, Optional
 from app.orchestrator.types import AIResponse
 from app.orchestrator.state import AIState
 
@@ -13,12 +13,12 @@ class IAgent(Protocol):
     name: str
     system_prompt: str
 
-    async def run(self, user_message: str, context: Dict[str, Any] = None) -> str:
+    async def run(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Runs the agent synchronously and returns the complete text response."""
         ...
 
-    async def run_stream(
-        self, user_message: str, context: Dict[str, Any] = None
+    def run_stream(
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[str]:
         """Runs the agent and streams the response token-by-token."""
         ...
@@ -60,8 +60,8 @@ class IWorkflow(Protocol):
         message: str,
         user_id: str,
         conversation_id: str,
-        context: Dict[str, Any] = None,
-        trace_id: str = None,
+        context: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
     ) -> AIResponse:
         """
         Runs the orchestrated graph pipeline and returns a structured response.

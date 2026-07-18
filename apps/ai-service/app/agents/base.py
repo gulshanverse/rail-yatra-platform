@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, AsyncIterator
+from typing import Dict, Any, AsyncIterator, Optional
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.providers.llm import get_chat_model
 
@@ -18,7 +18,7 @@ class BaseAgent:
         self.llm = get_chat_model()
 
     def _prepare_messages(
-        self, user_message: str, context: Dict[str, Any] = None
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> list:
         # Formulate final prompt with context if available
         context_str = ""
@@ -32,7 +32,7 @@ class BaseAgent:
             HumanMessage(content=user_message),
         ]
 
-    async def run(self, user_message: str, context: Dict[str, Any] = None) -> str:
+    async def run(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Runs the agent synchronously and returns the complete text response."""
         logger.info(f"Running agent '{self.name}'")
         messages = self._prepare_messages(user_message, context)
@@ -40,10 +40,10 @@ class BaseAgent:
         return str(response.content)
 
     async def run_stream(
-        self, user_message: str, context: Dict[str, Any] = None
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[str]:
         """Runs the agent and streams the response token-by-token."""
         logger.info(f"Streaming agent '{self.name}'")
         messages = self._prepare_messages(user_message, context)
         async for chunk in self.llm.astream(messages):
-            yield chunk.content
+            yield str(chunk.content)

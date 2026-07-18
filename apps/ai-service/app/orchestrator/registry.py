@@ -1,6 +1,6 @@
 import logging
 import threading
-from typing import Optional
+from typing import Optional, Dict, Any
 from app.orchestrator.interfaces import IAgent, IRegistry
 
 logger = logging.getLogger("ai-service.orchestrator.registry")
@@ -15,6 +15,8 @@ class AgentRegistry(IRegistry):
 
     _instance: Optional["AgentRegistry"] = None
     _lock: threading.Lock = threading.Lock()
+    _registry: Dict[str, IAgent]
+    _registry_lock: threading.Lock
 
     def __new__(cls) -> "AgentRegistry":
         if cls._instance is None:

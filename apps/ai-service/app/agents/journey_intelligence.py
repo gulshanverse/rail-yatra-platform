@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from typing import Dict, Any, AsyncIterator
+from typing import Dict, Any, AsyncIterator, Optional
 from app.agents.base import BaseAgent
 from app.engine.core import journey_intelligence_engine
 from app.engine.models import TravelRequirement, UserPreferences
@@ -104,7 +104,7 @@ class JourneyIntelligenceAgent(BaseAgent):
                 preferences=UserPreferences(),
             )
 
-    async def run(self, user_message: str, context: Dict[str, Any] = None) -> str:
+    async def run(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
         # 1. Parse text message
         requirement = await self._parse_query(user_message)
 
@@ -126,7 +126,7 @@ class JourneyIntelligenceAgent(BaseAgent):
         return report.tradeoffs_summary
 
     async def run_stream(
-        self, user_message: str, context: Dict[str, Any] = None
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[str]:
         # Stream the full report back as a single text chunk
         # Since the engine runs deterministically, we compute and stream the result.

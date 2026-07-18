@@ -74,7 +74,7 @@ def get_compiled_graph():
                 return NODE_ERROR
 
             selected = state.get("selected_agent")
-            if selected in agent_keys:
+            if isinstance(selected, str) and selected in agent_keys:
                 return selected
             logger.warning(
                 f"Selected agent '{selected}' not found. Defaulting to conversation."

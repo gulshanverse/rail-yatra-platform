@@ -3,5 +3,7 @@
   "python.defaultInterpreterPath": "${workspaceFolder}/apps/ai-service/venv/Scripts/python.exe",
   "python.analysis.extraPaths": [
     "${workspaceFolder}/apps/ai-service"
-  ]
+  ],
+  "json.schemaDownload.enable": false,
+  "yaml.schemaStore.enable": false
 }

@@ -51,6 +51,8 @@ class Workflow(IWorkflow):
             "latency_ms": 0.0,
             "errors": [],
             "timestamps": {"workflow_start_time": time.time()},
+            "user_message": message,
+            "history": [],
         }
 
         logger.info(
