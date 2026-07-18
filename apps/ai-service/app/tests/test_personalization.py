@@ -28,6 +28,11 @@ from app.personalization.cache import CacheManager
 from app.personalization.preferences import PreferenceEngine
 from app.personalization.behavior import BehaviorEngine
 from app.personalization.observations import ObservationEngine
+from app.personalization.learning import LearningEngine
+from app.personalization.confidence import ConfidenceEngine
+from app.personalization.conflict import ConflictResolutionEngine
+from app.personalization.inheritance import PreferenceInheritanceEngine
+from app.personalization.dependency import PreferenceDependencyEngine
 from app.personalization.validators import (
     ProfileValidator,
     ConsentValidator,
@@ -415,6 +420,154 @@ class TestPersonalizationBatch2(unittest.TestCase):
         self.assertEqual(results[0].value, "2A")
         # Check generated id prefix
         self.assertTrue(results[0].observation_id.startswith("obs-"))
+
+
+class TestPersonalizationBatch3(unittest.TestCase):
+    def setUp(self) -> None:
+        self.learning_engine = LearningEngine()
+        self.confidence_engine = ConfidenceEngine()
+        self.conflict_engine = ConflictResolutionEngine()
+        self.inheritance_engine = PreferenceInheritanceEngine()
+        self.dependency_engine = PreferenceDependencyEngine()
+
+    def test_learning_engine(self) -> None:
+        obs_list = [
+            LearningObservationDTO(
+                observation_id=f"obs-{i}",
+                traveler_id="traveler-b3-1",
+                action_type="SEARCH",
+                value="SL",
+                timestamp=datetime.utcnow(),
+                ttl_expiry=datetime.utcnow(),
+                metadata={},
+            )
+            for i in range(5)
+        ]
+        behavior = TravelerBehaviorDTO(
+            behavior_id="beh-b3-1",
+            traveler_profile_id="traveler-b3-1",
+            active_patterns=[],
+            habits=[],
+            routines=[],
+            last_aggregation_date=datetime.utcnow(),
+        )
+        decisions = self.learning_engine.evaluate(obs_list, behavior)
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0].mutation_key, "preferred_class")
+        self.assertEqual(decisions[0].mutation_value, "SL")
+        self.assertEqual(decisions[0].mutation_category, "COMFORT")
+        self.assertTrue(decisions[0].confidence_score >= 0.5)
+
+    def test_confidence_engine(self) -> None:
+        # 1. Base calculate
+        last_observed = datetime.utcnow()
+        conf = self.confidence_engine.calculate("pref-b3-1", 3, last_observed)
+        # score = 0.5 + 3 * 0.1 = 0.8
+        self.assertEqual(conf.score, 0.8)
+        self.assertEqual(conf.level, "HIGH")
+
+        # 2. Decay calculate (10 days elapsed)
+        ten_days_ago = datetime.utcnow() - timedelta(days=10)
+        conf_decayed = self.confidence_engine.calculate("pref-b3-1", 3, ten_days_ago)
+        # score = 0.8 * (0.95 ** 10) = 0.8 * 0.5987 = 0.479
+        self.assertAlmostEqual(conf_decayed.score, 0.8 * (0.95**10), places=5)
+        self.assertEqual(conf_decayed.level, "MEDIUM")
+
+        # 3. apply_decay method
+        conf.last_evaluated = datetime.utcnow() - timedelta(days=5)
+        conf_applied = self.confidence_engine.apply_decay(conf)
+        self.assertAlmostEqual(conf_applied.score, 0.8 * (0.95**5), places=5)
+
+    def test_conflict_engine(self) -> None:
+        p_explicit = TravelerPreferenceDTO(
+            preference_id="p-e",
+            traveler_profile_id="traveler-b3-2",
+            category="COMFORT",
+            preference_key="preferred_class",
+            value="2A",
+            type="EXPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={},
+        )
+        p_implicit = TravelerPreferenceDTO(
+            preference_id="p-i",
+            traveler_profile_id="traveler-b3-2",
+            category="COMFORT",
+            preference_key="preferred_class",
+            value="3A",
+            type="IMPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={"confidence_score": 0.9},
+        )
+        p_implicit_low = TravelerPreferenceDTO(
+            preference_id="p-i-low",
+            traveler_profile_id="traveler-b3-2",
+            category="COMFORT",
+            preference_key="preferred_class",
+            value="SL",
+            type="IMPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={"confidence_score": 0.4},
+        )
+
+        # Explicit vs Implicit resolution
+        resolved = self.conflict_engine.resolve([p_explicit, p_implicit])
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0].value, "2A")  # Explicit wins
+
+        # Multiple implicit resolution
+        resolved_implicit = self.conflict_engine.resolve([p_implicit, p_implicit_low])
+        self.assertEqual(len(resolved_implicit), 1)
+        self.assertEqual(
+            resolved_implicit[0].value, "3A"
+        )  # Highest confidence score wins
+
+        # Detect conflicts
+        conflicts = self.conflict_engine.detect_conflicts([p_explicit, p_implicit])
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["conflict_type"], "EXPLICIT_IMPLICIT_OVERRIDE")
+
+    def test_inheritance_engine(self) -> None:
+        dietary_pref = TravelerPreferenceDTO(
+            preference_id="p-diet",
+            traveler_profile_id="traveler-b3-3",
+            category="DIETARY",
+            preference_key="dietary_preference",
+            value="veg",
+            type="EXPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={},
+        )
+        propagated = self.inheritance_engine.propagate([dietary_pref])
+        self.assertEqual(len(propagated), 2)
+        meal_choice = [p for p in propagated if p.preference_key == "meal_choice"][0]
+        self.assertEqual(meal_choice.value, "veg")
+
+    def test_dependency_engine(self) -> None:
+        wheelchair_pref = TravelerPreferenceDTO(
+            preference_id="p-wheel",
+            traveler_profile_id="traveler-b3-4",
+            category="COMFORT",
+            preference_key="wheelchair_access",
+            value=True,
+            type="EXPLICIT",
+            version=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            metadata={},
+        )
+        evaluated = self.dependency_engine.evaluate([wheelchair_pref])
+        self.assertEqual(len(evaluated), 2)
+        seat_pref = [p for p in evaluated if p.preference_key == "seat_preference"][0]
+        self.assertEqual(seat_pref.value, "lower")
 
 
 if __name__ == "__main__":
