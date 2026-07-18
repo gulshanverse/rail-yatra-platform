@@ -23,11 +23,16 @@ from app.personalization.dto.models import (
     LearningObservationDTO,
     PreferenceConfidenceDTO,
     TravelerPersonalizationContext,
+    ReasonCodeDTO,
+    PreferenceEvidenceDTO,
 )
 from app.personalization.cache import CacheManager
 from app.personalization.preferences import PreferenceEngine
 from app.personalization.behavior import BehaviorEngine
 from app.personalization.observations import ObservationEngine
+from app.personalization.adaptation import RecommendationAdaptationEngine
+from app.personalization.reason_codes import ReasonCodeEngine
+from app.personalization.explanations import ExplanationEngine
 from app.personalization.learning import LearningEngine
 from app.personalization.confidence import ConfidenceEngine
 from app.personalization.conflict import ConflictResolutionEngine
@@ -568,6 +573,91 @@ class TestPersonalizationBatch3(unittest.TestCase):
         self.assertEqual(len(evaluated), 2)
         seat_pref = [p for p in evaluated if p.preference_key == "seat_preference"][0]
         self.assertEqual(seat_pref.value, "lower")
+
+
+class TestPersonalizationBatch4(unittest.TestCase):
+    def setUp(self) -> None:
+        self.reason_code_engine = ReasonCodeEngine()
+        self.explanation_engine = ExplanationEngine()
+        self.adaptation_engine = RecommendationAdaptationEngine(self.reason_code_engine)
+
+    def test_reason_code_engine(self) -> None:
+        reason_exp = self.reason_code_engine.assign(
+            {"preference_key": "preferred_class", "type": "EXPLICIT"}
+        )
+        self.assertEqual(reason_exp.code, "PREF_EXPLICIT_CLASS")
+        self.assertEqual(reason_exp.priority, 10)
+
+        reason_imp = self.reason_code_engine.assign(
+            {"preference_key": "seat_preference", "type": "IMPLICIT"}
+        )
+        self.assertEqual(reason_imp.code, "PREF_IMPLICIT_SEAT")
+        self.assertEqual(reason_imp.priority, 4)
+
+        reason_lookup = self.reason_code_engine.lookup("PREF_EXPLICIT_CLASS")
+        self.assertEqual(reason_lookup.code, "PREF_EXPLICIT_CLASS")
+
+    def test_explanation_engine(self) -> None:
+        reason = ReasonCodeDTO(
+            code="PREF_EXPLICIT_CLASS",
+            category="COMFORT",
+            description="Personalized comfort options",
+            priority=10,
+            explanation_template="Personalized comfort class preference of {value}.",
+        )
+        evidence = PreferenceEvidenceDTO(
+            evidence_id="ev-1",
+            preference_id="pref-1",
+            observation_ids=[],
+            rule_triggers=[],
+            timestamp=datetime.utcnow(),
+        )
+        res = self.explanation_engine.explain(reason, evidence, "en-US")
+        self.assertEqual(
+            res["explanation"],
+            "Personalized comfort class preference of active choice.",
+        )
+        self.assertEqual(res["locale"], "en-US")
+        self.assertEqual(res["reason_code"], "PREF_EXPLICIT_CLASS")
+
+    def test_recommendation_adaptation_engine(self) -> None:
+        ctx = TravelerPersonalizationContext(
+            traveler_id="traveler-b4",
+            version=1,
+            correlation_id="corr-b4",
+            timestamp=datetime.utcnow(),
+            persona="GENERAL",
+            explicit_preferences={"preferred_class": "2A"},
+            implicit_preferences={"seat_preference": "lower"},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-b4",
+            telemetry={},
+        )
+        rec_journey = {
+            "id": "rec-123",
+            "name": "Journey Offer",
+            "scenario": "JOURNEY_LISTING",
+        }
+        rec_booking = {
+            "id": "rec-123",
+            "name": "Seat Offer",
+            "scenario": "BOOKING_OPTIONS",
+        }
+
+        # Journey listing scenario (uses class)
+        adapt_journey = self.adaptation_engine.adapt(rec_journey, ctx)
+        self.assertEqual(adapt_journey.target_id, "rec-123")
+        self.assertEqual(adapt_journey.adapted_fields.get("preferred_class"), "2A")
+        self.assertEqual(adapt_journey.reason_code, "PREF_EXPLICIT_CLASS")
+
+        # Booking options scenario (uses seat)
+        adapt_booking = self.adaptation_engine.adapt(rec_booking, ctx)
+        self.assertEqual(adapt_booking.adapted_fields.get("seat_preference"), "lower")
+        self.assertEqual(adapt_booking.reason_code, "PREF_IMPLICIT_SEAT")
 
 
 if __name__ == "__main__":
