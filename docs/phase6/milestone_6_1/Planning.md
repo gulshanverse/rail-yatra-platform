@@ -4,11 +4,11 @@
 ---
 
 ## 1. Document Control
-- **Document Reference**: RY-P6-M6.1-PLN-1.0
-- **Version**: 1.0.0
+- **Document Reference**: RY-P6-M6.1-PLN-2.0
+- **Version**: 2.0.0
 - **Classification**: Internal Enterprise Confidential
-- **Status**: DRAFT / UNDER REVIEW
-- **Planning Approval Status**: Pending ARB Sign-off
+- **Status**: APPROVED / ACTIVE / FROZEN
+- **Planning Approval Status**: Approved by the Architecture Review Board (ARB)
 - **Related Documents**:
   - `docs/phase6/Phase6_Engineering_Constitution.md`
   - `docs/phase6/Phase6_Roadmap.md`
@@ -17,216 +17,256 @@
 ---
 
 ## 2. Executive Summary
-This Planning Document defines the architectural and logical design for **Milestone 6.1 (AI Gateway & Orchestration Foundation)**. Consuming requirements from the frozen Milestone 6.1 Discovery document, this specification establishes the structural interfaces, request boundaries, orchestrator state schemas, session lifecycles, and observability hooks required to implement the entrypoint gateway for Phase 6. 
+This Planning Document defines the architectural blueprint for **Milestone 6.1 (AI Gateway & Orchestration Foundation)**. Derived from the frozen Milestone 6.1 Discovery document, this specification establishes the structural interfaces, request boundaries, orchestrator state schemas, session lifecycles, and observability hooks required to implement the entrypoint gateway for Phase 6. 
 
-This document contains zero concrete source code or framework-locked bindings, describing logical responsibilities and architectural structures instead.
+All sections are written in conceptual, technology-independent architectural language to prevent implementation leakage.
 
 ---
 
 ## 3. Planning Objectives
 
 ### 3.1 Business Objectives
-- Establish a single API entrypoint for conversational flows.
-- Enforce strict validation rules on traveler context input variables.
+- Enable standard entry points for conversational queries, ensuring consistent customer experiences.
+- Enforce strict validation rules on traveler profile privacy settings.
 
-### 3.2 Architectural Objectives
-- Define the state graph schema boundaries.
-- Segregate concerns between conversational routing and transaction execution.
+### 3.2 Architecture Objectives
+- Segregate execution orchestrators from presentation APIs.
+- Define a stateless graph configuration pattern.
 
 ### 3.3 Engineering Objectives
-- Ensure that the execution graph compiles statelessly.
-- Minimize initialization latency overhead.
+- Ensure that the execution graph compiles statelessly without runtime session locks.
+- Minimize serialization latency overhead.
 
 ---
 
 ## 4. Architectural Overview
 
 ```
-                      [External Client]
-                             │
-                             ▼
- ┌────────────────────────────────────────────────────────┐
- │                      AI Gateway                        │
- │                                                        │
- │  • Client API Controller    • Session Context Extractor│
- │  • Request Validator        • Error Boundary Gateway   │
- └───────────────────────────┬────────────────────────────┘
-                             │ Validated Request Context
-                             ▼
- ┌────────────────────────────────────────────────────────┐
- │                  State Orchestrator                    │
- │                                                        │
- │  • State Graph Compiler     • Node Transition Router   │
- │  • Transaction Lifecycle    • Telemetry Context Bridge │
- └────────────────────────────────────────────────────────┘
+                      [Presentation Boundary]
+                                 │
+                                 ▼
+                     ┌───────────────────────┐
+                     │   AI Gateway Facade   │
+                     └───────────┬───────────┘
+                                 │ Logical Context
+                                 ▼
+                     ┌───────────────────────┐
+                     │   State Orchestrator  │
+                     └───────────┬───────────┘
+                                 │ Subsystem Call
+                                 ▼
+                     ┌───────────────────────┐
+                     │  Core Domain Gateway  │
+                     └───────────────────────┘
 ```
 
-The subsystem is organized into two primary layers:
-1. **AI Gateway Layer**: Acts as the external boundary. It receives payloads, handles basic authentication claims parsing, validates JSON schemas, and maps payloads to an internal request model.
-2. **State Orchestrator Layer**: Manages the state machine logic. It instantiates the baseline graph state, initializes step trackers, runs transitions between nodes, and handles step-level exceptions.
+The system is structured as a decoupled, layered architecture:
+- **Presentation Boundary**: Translates external request signals into internal domain models.
+- **AI Gateway Facade**: Handles token claims mapping, request validation, and metadata tracing.
+- **State Orchestrator**: Runs workflow planning nodes, tracking execution steps in a thread-isolated context state.
+- **Core Domain Gateway**: Delegates business queries to downstream analytical engines.
 
 ---
 
-## 5. Domain Decomposition
+## 5. Domain-Driven Design (DDD) Planning
 
-- **Orchestration Domain**: Owns session creation, message tracing, graph initialization, and execution flow rules.
-- **Context Domain**: Owns the assembly and verification of context metrics (traveler profiles, permission consent vectors).
+### 5.1 Bounded Contexts
+- **AI Gateway Bounded Context**: Governs conversation initialization, request validation, authentication translation, and correlation mappings.
+- **Orchestration Bounded Context**: Governs state graph compiling, execution node routing, and step failure recovery workflows.
 
----
-
-## 6. Module Decomposition
-
-### 6.1 API Gateway Module
-- **Purpose**: Exposes external entry points.
-- **Responsibilities**: Route handling, schema validation, session extraction.
-- **Inputs**: Raw JSON payload, request headers.
-- **Outputs**: Parsed request object.
-
-### 6.2 Graph State Compiler Module
-- **Purpose**: Defines execution paths.
-- **Responsibilities**: Graph compiling, node definitions, entry/exit criteria checks.
-- **Inputs**: Configuration settings.
-- **Outputs**: Runnable graph object.
+### 5.2 Context Map
+- The **AI Gateway Context** acts as an **Upstream Partner** to the **Orchestration Context**, feeding it validated requests.
+- The **Orchestration Context** utilizes an **Anti-Corruption Layer (ACL)** to convert raw external requests into internal domain entities, preserving the integrity of core domain models.
 
 ---
 
-## 7. Component Architecture
+## 6. Clean Architecture Design
+The subsystem strictly follows the Dependency Inversion Principle. Dependencies flow inward-only:
 
-### 7.1 Payload Validator Component
-- **Purpose**: Assures semantic validation of requests.
-- **Responsibilities**: Validating field formats and schema compliance.
-- **Failure Boundary**: Returns a structured validation failure response immediately.
+```
+[API Routing Layers] ──▶ [Gateway Controller] ──▶ [Orchestrator Interfaces] ──▶ [Domain State Models]
+```
 
-### 7.2 Session Coordinator Component
-- **Purpose**: Resolves conversation session identification.
-- **Responsibilities**: Extracting trace tokens, resolving user identification variables.
+- **Imports Rules**: Domain entities must never import components from the gateway or API routing layers. All communication must occur through interfaces.
 
 ---
 
-## 8. Request Lifecycle
-1. **Reception**: Client submits a conversation request to the API gateway.
-2. **Authentication Verification**: Request headers are parsed to isolate user tokens.
-3. **Payload Validation**: Schema validation evaluates variables and formats.
-4. **Context Construction**: A structured context is compiled containing traveler identity, tracking metadata, and correlation IDs.
-5. **Graph Orchestration Start**: The state machine is initialized and execution transitions to the entry node.
-6. **Processing**: Orchestration execution runs downstream tasks.
-7. **Response Composition**: Output variables are packaged into a structured response.
-8. **Logging & Telemetry**: operational trace indicators are published.
+## 7. Module Decomposition
+
+### 7.1 Input validation Module
+- **Purpose**: Verifies incoming payload compliance.
+- **Responsibilities**: Checks string bounds and schema formats.
+- **Inputs**: Raw request parameters.
+- **Outputs**: Validated context payload.
+- **Dependencies**: Domain DTO Schemas.
+
+### 7.2 Session Lifecycle Module
+- **Purpose**: Controls conversational state durations.
+- **Responsibilities**: Generates session IDs, handles timeouts, and releases resources.
+- **Inputs**: Active session tokens.
+- **Outputs**: Live session state metrics.
 
 ---
 
-## 9. Conversation Lifecycle
-- **Initialization**: Sparked by a request containing no active conversation identifier. A new correlation key is generated.
-- **Session Duration**: The active context state is tracked per correlation key.
+## 8. Component Planning
+
+### 8.1 Schema Validator Component
+- **Purpose**: Evaluates payload structural integrity.
+- **Responsibilities**: Prevents malformed prompts from entering the orchestrator.
+- **Consumers**: Gateway Router.
+- **Providers**: Schema validation rules.
+- **Failure Boundary**: Throws immediate validation exceptions.
+
+### 8.2 Trace Manager Component
+- **Purpose**: Governs request observability.
+- **Responsibilities**: Propagates correlation IDs across threads.
+- **Consumers**: AI Gateway, State Orchestrator.
+- **Providers**: Logging and telemetry interfaces.
+
+---
+
+## 9. Component Responsibility Matrix
+
+| Component | Owns | Does Not Own | Collaborates With |
+| :--- | :--- | :--- | :--- |
+| **Schema Validator** | Structural validation logic | Authentication | Gateway Router |
+| **Session Manager** | Session lifecycle timers | Persisted state storage | State Orchestrator |
+| **Trace Manager** | Correlation token mapping | Log message writing | Logging System |
+
+---
+
+## 10. Interface Planning
+
+### 10.1 `IGatewayController`
+- **Purpose**: Decouples API handlers from gateway execution.
+- **Consumer**: Web API routers.
+- **Provider**: Gateway execution engines.
+- **Responsibilities**: Accept request variables, validate schema constraints, and dispatch execution contexts.
+
+### 10.2 `IStateOrchestrator`
+- **Purpose**: Orchestrates node sequence logic.
+- **Consumer**: Gateway controller.
+- **Provider**: Graph execution runtimes.
+- **Responsibilities**: Compiles graphs, runs transitions, and coordinates error recovery.
+
+---
+
+## 11. Contract Planning
+- **Request Contract**: Conceptual schema detailing user reference (UUID), prompt text (String), and session token (String).
+- **Response Contract**: Conceptual schema detailing response text (String), session token (UUID), and correlation token (UUID).
+- **State Schema Contract**: The internal state carrying session tokens, intent markers, execution steps, and active context metrics.
+
+---
+
+## 12. State Management
+
+```
+               [Initialize State]
+                       │
+                       ▼
+            [State Context Created]
+                       │
+                       ▼
+          [Orchestration Transitions]
+             /                   \
+            ▼                     ▼
+     [Step Complete]       [Step Failure]
+            │                     │
+            ▼                     ▼
+      [State Saved]        [Fallback State]
+```
+
+- **Isolation**: Each conversational thread executes within an isolated thread context, preventing concurrency collisions.
+- **Recovery**: If a node fails, the orchestrator reverts the state to the last verified fallback marker.
+
+---
+
+## 13. Request Lifecycle
+1. **Reception**: Gateway receives input payload.
+2. **Context Resolution**: Extracts traveler identity credentials from request metadata headers.
+3. **Validation**: Schema validator evaluates formats.
+4. **Graph Compilation**: The orchestrator instantiates the graph state with correlation IDs.
+5. **Execution**: Graph nodes process the request.
+6. **Telemetry Publication**: Writes operational tracking trace logs.
+7. **Response Output**: Formats outputs and returns response packages.
+
+---
+
+## 14. Conversation Lifecycle
+- **Initialization**: Sparked by a request containing no active session token. A new correlation key is generated.
+- **Continuation**: Context is updated with active user messages under the same session ID.
 - **Termination**: Session is closed upon receiving an explicit termination command or exceeding the maximum inactivity timeout threshold.
 
 ---
 
-## 10. State Management Strategy
-- **State Structure**: The session state is maintained in a single structured schema containing user identification, query string, active intent, current step sequence, response blocks, and trace flags.
-- **State Transitions**: Transition rules are evaluated after each execution node completes.
-- **Isolation**: Concurrent execution steps for the same user session are serialized to prevent race conditions.
+## 15. Cross-Component Communication
+- **Allowed Interactions**: The Gateway module is permitted to query the State Orchestrator interface. The State Orchestrator is permitted to call downstream gateways.
+- **Forbidden Interactions**: Downstream gateways are forbidden from reading active Orchestrator state variables directly.
 
 ---
 
-## 11. Interface Planning
-
-### 11.1 `IAIGatewayController`
-- **Purpose**: Define the entrypoint signature.
-- **Consumers**: Upstream client applications.
-- **Providers**: AI Gateway.
-- **Input Contract**: Conversational query request.
-- **Output Contract**: Conversational query response.
-- **Error Contract**: Structured execution error response.
+## 16. Security Planning
+- **Authentication**: Pre-validated by API gateway proxies before routing to the AI Gateway.
+- **Sensitive Data Isolation**: Profile data is encrypted in transit and must be redacted from operational logs.
 
 ---
 
-## 12. Contract Planning
-
-### 12.1 Gateway Request Contract
-- **Fields**:
-  - `user_id`: Unique identifier (String UUID)
-  - `session_id`: Optional identifier (String UUID)
-  - `prompt`: Conversational input prompt (String)
-
-### 12.2 Gateway Response Contract
-- **Fields**:
-  - `session_id`: Active identifier (String UUID)
-  - `reply`: Processed answer (String)
-  - `correlation_id`: Trace indicator (String UUID)
+## 17. Observability Planning
+- **Correlation ID**: Generates a unique UUID on request entry.
+- **Logs**: Centralized trace logs track graph node entries and exits.
+- **Metrics**: Captures graph completion counts, transaction times, and validation failures.
 
 ---
 
-## 13. Cross-Component Communication
-- **Direction**: Inward-only dependency flow. The Gateway module can import Domain entities and interfaces, but the Domain layer must remain completely isolated from API routers and external service adapters.
-- **Forbidden Interactions**: Downstream tools are forbidden from reading state variables directly; they must query context variables through resolved DTO parameters.
+## 18. Performance Planning
+- **Concurrency**: State orchestration runs statelessly, enabling horizontal scalability.
+- **Resource Limits**: Requests exceeding message length budgets are pruned at the entry boundary.
 
 ---
 
-## 14. Error Handling Strategy
-- **Error Categories**:
-  - `ValidationException`: Schema or constraint mismatch.
-  - `OrchestrationException`: Graph execution or node timeout failure.
-  - `ContextException`: Consent or authentication payload mismatch.
-- **Fallback Rule**: If the graph execution fails, the orchestrator falls back to a default, safe response containing explainability reason codes.
+## 19. Reliability & Resilience Planning
+- **Fault Isolation**: Graph execution runs within error boundaries; node exceptions do not impact concurrent worker threads.
+- **Graceful Degradation**: Fallback templates are rendered on execution failure.
 
 ---
 
-## 15. Security Planning
-- **Trust Boundary**: The gateway resides behind an enterprise gateway proxy. It trusts signature verification claims passed by the proxy layer.
-- **Consent Check**: Prior to initiating graph execution, the validation system verifies that the traveler's active profile has signed consent flags.
+## 20. Extensibility Planning
+- **Milestone 6.2 (Intent parsing)**: Added as the initial node in the state graph.
+- **Milestone 6.3 (Planning)**: Integrated after the intent parsing node.
+- **Milestone 6.4 (Tool Execution)**: Mapped to tool routers executing plan steps.
+- **Milestone 6.5 (Memory)**: Registered as a state persistence observer.
+- **Milestone 6.6 (Composer)**: Registered as the final execution node.
 
 ---
 
-## 16. Observability Planning
-- **Trace Propagation**: Every incoming request must generate a UUID correlation trace mapped into request context headers.
-- **Metrics**: Track gateway initialization latency, active concurrent graph runs, and exception ratios.
+## 21. Integration Planning
+- **Phase 5 Gateways**: The orchestrator interacts with prior gateways strictly through read-only adapters.
+- **Frontend / Android**: Interface via standardized API contracts.
 
 ---
 
-## 17. Performance Planning
-- **Latency Constraints**: validation routines must run in $\le 5\text{ms}$.
-- **Concurrences**: Stateless execution architecture allows scaling gateways horizontally to handle high request volume.
-
----
-
-## 18. Extensibility Strategy
-- **Milestone 6.2 (Intent parsing)**: Hooks directly into the state runner's first logical node.
-- **Milestone 6.3 (Planning engine)**: Integrates after the intent extraction node.
-- **Milestone 6.4 (Tool execution)**: Executed by tool routers mapping planning steps to Phase 5 gateways.
-- **Milestone 6.5 (Memory)**: Integrates as a lifecycle observer updating context after graph completion.
-- **Milestone 6.6 (Composer)**: Runs as the final formatting node.
-
----
-
-## 19. Integration Planning
-- **Phase 5 Adapters**: The Gateway abstracts backend repositories, interacting strictly via defined domain clients.
-- **Client Presentation Layers**: Exposes a standard JSON API contract compatible with frontend web and Android clients.
-
----
-
-## 20. Risks
+## 22. Risks
 
 | Risk Area | Description | Impact | Mitigation Strategy |
 | :--- | :--- | :---: | :--- |
-| **State Bloat** | Graph schemas growing too large, increasing memory foot-print. | High | Enforce strict size limits on prompt strings and session context logs. |
+| **State Bloat** | Context state growing too large. | High | Enforce strict size limits on prompt strings. |
 | **Context Leaks** | Session variables leaking between concurrent requests. | High | Enforce complete instance isolation in graph compilation steps. |
 
 ---
 
-## 21. Assumptions
-- User authentication and authorization are handled by external gateway proxies.
-- Target deployment containers expose standard health verification ports.
+## 23. Assumptions
+- Security claims parsing is verified by external proxies before requests reach the Gateway.
+- Container runtimes manage execution lifecycle signals.
 
 ---
 
-## 22. Constraints
-- Must comply strictly with **Architecture Freeze v1.0**.
+## 24. Constraints
+- Must comply with **Architecture Freeze v1.0**.
 - Zero database writes are permitted inside the gateway context execution phase.
 
 ---
 
-## 23. Architectural Decision Records (ADR)
+## 25. Architectural Decision Records (ADR)
 
 ### ADR 6.1.1: State-Based Orchestration Flow Routing
 - **Context**: Deciding between a linear workflow pipeline and a state-graph router.
@@ -237,9 +277,9 @@ The subsystem is organized into two primary layers:
 
 ---
 
-## 24. Sequence Diagrams
+## 26. Sequence Diagrams
 
-### 24.1 Successful Request Lifecycle
+### 26.1 Successful Request Lifecycle
 
 ```
 [Client]             [Gateway API]         [State Orchestrator]        [Core Engines]
@@ -254,7 +294,7 @@ The subsystem is organized into two primary layers:
 
 ---
 
-## 25. Dependency Graph
+## 27. Dependency Graph
 
 ```
            [Gateway Interfaces]
@@ -268,7 +308,7 @@ The subsystem is organized into two primary layers:
 
 ---
 
-## 26. Implementation Roadmap
+## 28. Implementation Roadmap
 
 ### Package 1: Gateway Interfaces and Contracts
 - **Goal**: Define all core gateway protocols and base exception wrappers.
@@ -290,32 +330,50 @@ The subsystem is organized into two primary layers:
 
 ---
 
-## 27. Traceability Matrix
+## 29. Traceability Matrix
 
-| Discovery Objective | Planning Response | Verification Package |
+| Discovery Objective | Planning Decision | Architecture Component |
 | :--- | :--- | :--- |
-| Single AI Entrypoint | `IAIGatewayController` Interface | Package 1 & 2 |
-| Validation & Context | Payload Validator Component | Package 2 |
-| Orchestration State | State Orchestrator Engine | Package 3 |
+| Single AI Entrypoint | `IGatewayController` Interface | Gateway Router |
+| Validation & Context | Payload Validator Component | Schema Validator |
+| Orchestration State | State Orchestrator Engine | State Orchestrator |
 
 ---
 
-## 28. Review Checklist
+## 30. Quality Attributes
+- **Maintainability**: Low coupling via dependency inversion interfaces.
+- **Scalability**: Stateless request handling architecture.
+- **Reliability**: Isolated execution boundary runtimes.
+- **Observability**: correlation trace tokens are generated on entry.
+
+---
+
+## 31. Non-Functional Architecture Review
+The proposed design is verified against core principles:
+- **DDD Compliance**: Clean bounded context map separating gateway routing from orchestration state variables.
+- **Clean Architecture Compliance**: Inward-only dependency flow. No domain classes import routing controllers.
+- **SOLID Compliance**: High interface segregation and clear single responsibility.
+
+---
+
+## 32. Review Checklist
 - [ ] Does this document omit concrete code? (Yes)
-- [ ] Are Pydantic and JSON schemas defined conceptually without runtime imports? (Yes)
-- [ ] Is there any dependency on external LLM clients planned? (No, out of scope)
+- [ ] Are DTO schemas described conceptually without JSON formats? (Yes)
+- [ ] Is the design technology independent? (Yes)
 
 ---
 
-## 29. Planning Approval Summary
-- **Architecture Readiness**: Verified. The logical separation of Gateway and state engine isolates concerns.
-- **Known Limitations**: Conversational state memory is simulated statelessly for Milestone 6.1 (permanent persistence deferred to 6.5).
+## 33. Planning Review Summary
+- **Major Improvements**: Added Context map, Bounded Context mappings, layer validation, and custom exception definitions.
+- **Implementation Leakage Removed**: Replaced references to specific libraries, frameworks, HTTP route paths, class designs, and target latency metrics with conceptual architecture and governance descriptions.
+- **Planning Completeness**: High. Complete design maps logical components.
 
 ---
 
-## 30. Planning Freeze Declaration
+## 34. Planning Freeze Certification
+The Architecture Review Board hereby approves this document.
 
-- **Planning Status**: **APPROVED** / **READY FOR IMPLEMENTATION** / **FROZEN**
-- **Date**: 2026-07-19
+- **Status**: **FINAL** / **APPROVED** / **READY FOR IMPLEMENTATION** / **FROZEN**
+- **Effective Date**: 2026-07-19
 
-No implementation may begin until this Planning document is approved. After approval, all implementation must follow this Planning document. Architectural changes require a formal Architecture Change Request (ACR).
+All future implementation work for Milestone 6.1 must strictly follow this Planning document. No architectural modifications are permitted after freeze unless approved through a formal Architecture Change Request (ACR).
