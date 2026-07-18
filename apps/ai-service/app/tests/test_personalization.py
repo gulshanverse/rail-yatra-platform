@@ -820,5 +820,119 @@ class TestPersonalizationBatch5(unittest.TestCase):
         self.loop.run_until_complete(run_test())
 
 
+class TestPersonalizationCompliance(unittest.TestCase):
+    def test_policy_resolver_and_registry(self) -> None:
+        from app.personalization.policies.registry import PolicyRegistry
+        from app.personalization.policies.resolver import PolicyResolver
+
+        registry = PolicyRegistry()
+        policy = registry.get_policy("confidence_policy")
+        self.assertIsNotNone(policy)
+        self.assertEqual(policy.get("min_confidence_to_apply"), 0.70)
+
+        resolver = PolicyResolver(registry)
+        resolved = resolver.resolve("confidence_policy")
+        self.assertEqual(resolved.get("min_confidence_to_apply"), 0.70)
+        self.assertTrue(resolver.validate("confidence_policy", resolved))
+
+        self.assertEqual(resolver.resolve("non_existent"), {})
+        self.assertFalse(resolver.validate("non_existent", {}))
+
+    def test_strategy_registry(self) -> None:
+        from app.personalization.strategies.registry import StrategyRegistry
+        from app.personalization.dto.models import TravelerPersonalizationContext
+
+        ctx_weekly = TravelerPersonalizationContext(
+            traveler_id="traveler-1",
+            version=1,
+            correlation_id="corr-1",
+            timestamp=datetime.utcnow(),
+            persona="WEEKLY_COMMUTER",
+            explicit_preferences={},
+            implicit_preferences={},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-1",
+            telemetry={},
+        )
+
+        registry = StrategyRegistry()
+        strategies = registry.select(ctx_weekly)
+        self.assertTrue(len(strategies) >= 1)
+        self.assertEqual(strategies[0].__class__.__name__, "BusinessTravelerStrategy")
+
+        ctx_general = TravelerPersonalizationContext(
+            traveler_id="traveler-2",
+            version=1,
+            correlation_id="corr-2",
+            timestamp=datetime.utcnow(),
+            persona="GENERAL",
+            explicit_preferences={},
+            implicit_preferences={},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-2",
+            telemetry={},
+        )
+        strategies_gen = registry.select(ctx_general)
+        self.assertEqual(strategies_gen[0].__class__.__name__, "ComfortFirstStrategy")
+
+    def test_scenario_registry(self) -> None:
+        from app.personalization.scenarios.registry import ScenarioRegistry
+        from app.personalization.dto.models import TravelerPersonalizationContext
+
+        ctx_business = TravelerPersonalizationContext(
+            traveler_id="traveler-1",
+            version=1,
+            correlation_id="corr-1",
+            timestamp=datetime.utcnow(),
+            persona="BUSINESS",
+            explicit_preferences={},
+            implicit_preferences={},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-1",
+            telemetry={},
+        )
+
+        registry = ScenarioRegistry()
+        matched = registry.match(ctx_business)
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched.name, "Business Trip")
+
+        ctx_general = TravelerPersonalizationContext(
+            traveler_id="traveler-2",
+            version=1,
+            correlation_id="corr-2",
+            timestamp=datetime.utcnow(),
+            persona="GENERAL",
+            explicit_preferences={},
+            implicit_preferences={},
+            active_patterns=[],
+            active_intent={},
+            confidence_scores={},
+            evidence_references={},
+            explanation_context={},
+            audit_signature="sig-2",
+            telemetry={},
+        )
+        self.assertIsNone(registry.match(ctx_general))
+
+    def test_telemetry_adapter(self) -> None:
+        from app.personalization.telemetry.adapter import TelemetryAdapter
+
+        adapter = TelemetryAdapter()
+        adapter.record_span("test_span", {"key": "val"})
+
+
 if __name__ == "__main__":
     unittest.main()
