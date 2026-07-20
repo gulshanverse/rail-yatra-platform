@@ -169,16 +169,23 @@ The domain is focused on *state transition management under uncertainty*. A trav
 ---
 
 ### 19. Bounded Context
-The **Execution Context** is bounded strictly by the receipt of a validated travel plan and the delivery of a final execution result. It interacts with the *Intent Context* (for inputs), the *Planning Context* (for plan steps), and the *Infrastructure Context* (for external integration execution).
+The **Execution Context** is bounded strictly by the receipt of a validated travel plan and the delivery of a final execution result. It interacts with the *Intent Context* (for inputs), the *Planning Context* (for plan steps), the *Memory Context* (for long-term state caching), the *AI Orchestration Context* (for dynamic task reasoning), the *Notification Context* (for user progress alerts), the *Support Context* (for human agent handoffs), and the *Infrastructure Context* (for external integration execution).
 
 ---
 
 ### 20. Context Map
 
 ```
+                ┌──────────────────────────────────────┐
+                │        AI Orchestration Context      │
+                └──────────────────┬───────────────────┘
+                                   │
 [Planning Context] ──(Validated Plan)──► [Execution Context] ──(Adapter Contract)──► [Infrastructure Context]
-                                                │
-                                                └──(Events)──► [Observability Context]
+                                   │           │
+                                   │           ├──(Trace Events)──► [Observability Context]
+                                   │           │
+                                   ▼           ▼
+                         [Memory Context]   [Notification & Support Contexts]
 ```
 
 ---
@@ -190,7 +197,7 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 
 ### 22. Aggregate Root Definition
 * **Identifier**: Unique Execution Session ID.
-* **State**: Current overall status (Initiated, Processing, Completed, Reverting, Reverted, Failed).
+* **State**: Current overall status (Initiated, Processing, Completed, Reverting, Reverted, Failed, Paused).
 * **Associated Travel Plan ID**: Trace pointer to the original formulated plan.
 * **Step Trackers**: Collections tracking the progress of each step.
 
@@ -203,6 +210,15 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 ---
 
 ### 24. Value Object Definitions
+* **ExecutionToken**: Cryptographic unique key ensuring idempotency and preventing duplicate external transactions.
+* **ExecutionPriority**: Classification representing the SLA queue tier (e.g., Immediate, High, Standard).
+* **ExecutionWindow**: A value object representing valid temporal boundaries for execution (e.g., departure time window limits).
+* **ExecutionOutcome**: Encapsulation of step results, including response classification and raw non-PII parameters.
+* **ExecutionResult**: The terminal status detail of a completed step or compensation command.
+* **RetryPolicy**: Value object defining the Controlled Retry Policy settings (delay, backoff multiplier, jitter percentage, maximum attempts).
+* **CompensationDecision**: Architectural mapping determining whether a step failure requires automatic reversal or operator intervention.
+* **FailureCategory**: Domain classification of failures (e.g., Transient Network, System Crash, Inventory Sold Out, Authentication Mismatch).
+* **ExecutionMetadata**: Audit attributes tracking trace correlation IDs, client channel tags, and security descriptors.
 * **Execution State Log**: Record of state transitions with millisecond timestamps.
 * **Failure Context**: Details of connection timeouts, status codes, or partner messages.
 * **Correlation Metadata**: User ID, trace ID, and device metadata.
@@ -223,17 +239,28 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 
 ### 27. Domain Events
 * **ExecutionStarted**: Published when the session starts processing.
-* **StepExecutionSucceeded**: Published when a single plan step completes.
-* **StepExecutionFailed**: Published when a step fails after all retries are exhausted.
+* **ExecutionPaused**: Published when the session execution is temporarily paused awaiting external inputs or conditions.
+* **ExecutionResumed**: Published when a paused execution session resumes processing.
+* **ExecutionCancelled**: Published when a user manually cancels an active execution session.
+* **ExecutionTimedOut**: Published when a step or session exceeds defined execution SLA parameters.
+* **StepExecutionSucceeded**: Published when a single plan step completes successfully.
+* **StepExecutionFailed**: Published when a step fails after all retry attempts are exhausted.
 * **ReversalInitiated**: Published when compensation sequence begins.
+* **CompensationCompleted**: Published when all compensation steps have executed successfully.
+* **ManualInterventionRequested**: Published when automated recovery fails and a human support operator is required.
+* **ExecutionRecovered**: Published when a transient failure is successfully resolved via retries or alternate paths.
+* **ExecutionAborted**: Published when a session is aborted permanently without rollback due to regulatory or security overrides.
 * **ExecutionFinalized**: Published when the session reaches a terminal state (Completed or Reverted).
 
 ---
 
 ### 28. Business Invariants
-* **Invariant A**: No step may execute until all its prerequisites have succeeded.
-* **Invariant B**: A session cannot be marked Completed if any step has failed without compensation.
-* **Invariant C**: Compensation steps must never run in parallel with active execution steps.
+* **Invariant A (Dependency Rule)**: No execution step may run until all of its defined prerequisites have succeeded.
+* **Invariant B (Atomic Outcome)**: An execution session cannot be marked Completed if any step has failed without clean compensation.
+* **Invariant C (Isolation Rule)**: Compensation steps must never run in parallel with active execution steps.
+* **Invariant D (Single Session Lock)**: No duplicate execution sessions may exist for the same travel plan or execution token.
+* **Invariant E (Terminal State Immutability)**: Once a session reaches a terminal state (Completed, Reverted, or Aborted), it cannot be modified or restarted.
+* **Invariant F (Active State Uniqueness)**: Exactly one active execution state must be present at any point in the lifecycle.
 
 ---
 
@@ -261,12 +288,53 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 
 ---
 
-### 33. Lifecycle Model
+### 32a. Conceptual Architecture Views
 
+#### Layered View
+* **API/Presentation (Boundary)**: Consumes Commands/Queries and maps progress updates to notification channels.
+* **Application Services (Orchestration)**: Implements Saga Coordinator, checks policies, dispatches command steps.
+* **Domain Layer (Core)**: Enforces business invariants, executes specifications, holds aggregate entities.
+* **Infrastructure Layer (Adapters)**: Transforms conceptual contracts to external API calls.
+
+#### State Machine View
+```
+                      ┌───────────────┐
+                      │    Pending    │
+                      └───────┬───────┘
+                              │ (Start)
+                              ▼
+                      ┌───────────────┐
+                      │   Initiated   │
+                      └───────┬───────┘
+                              │
+                              ▼
+       ┌──────────────► ┌───────────────┐ ──(Pause)──► ┌───────────────┐
+       │                │  Processing   │              │    Paused     │
+       │                └───────┬───────┘ ◄─(Resume)── └───────────────┘
+       │                        │
+       │ (Next Step)            ├──(Fail & Cancel)──► ┌───────────────┐
+       │                        │                     │   Reverting   │
+       │                        ├──(Timeout/Abort)    └───────┬───────┘
+       │                        │                             │
+       │                        ▼                             ▼ (Rollback Done)
+       │                ┌───────────────┐             ┌───────────────┐
+       └────────────────┤  Step Done    │             │   Reverted    │
+                        └───────┬───────┘             └───────────────┘
+                                │ (All Done)
+                                ▼
+                        ┌───────────────┐
+                        │   Completed   │
+                        └───────────────┘
+```
+
+---
+
+### 33. Lifecycle Model
+The lifecycle transitions strictly check invariants at each boundary:
 ```
 [Draft] ──► [Initiated] ──► [Processing] ──┬──► [Completed]
-                                          │
-                                          └──► [Reverting] ──► [Reverted]
+                                          ├─(Fail)──► [Reverting] ──► [Reverted]
+                                          └─(Abort)─► [Aborted]
 ```
 
 ---
@@ -274,9 +342,10 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 ## PART 2B — Application Architecture
 
 ### 34. Application Services
-* **ExecutionCoordinator**: The primary facade coordinating the orchestration flow.
-* **CompensationOrchestrator**: Coordinates execution of rollback operations.
-* **StateNotifier**: Handles formatting and dispatching progress notifications.
+### 34. Application Services
+* **ExecutionCoordinator**: The primary facade coordinating the orchestration flow of the execution session sagas.
+* **CompensationOrchestrator**: Coordinates execution of rollback operations (compensating transactions) in reverse order of completion.
+* **StateNotifier**: Handles formatting and dispatching progress notifications to user-facing channels.
 
 ---
 
@@ -290,15 +359,15 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 ---
 
 ### 36. Command Model
-* **StartExecutionCommand**: Triggers a new execution session.
-* **UpdateStepStatusCommand**: Records results from external adapters.
+* **StartExecutionCommand**: Triggers a new execution session with execution token.
+* **UpdateStepStatusCommand**: Records results (success/failure) from external adapters.
 * **TriggerRollbackCommand**: Forces compensation workflows.
 
 ---
 
 ### 37. Query Model
-* **GetExecutionStateQuery**: Returns the current status of all steps.
-* **GetAuditLogQuery**: Retrieves execution history for debugging.
+* **GetExecutionStateQuery**: Returns the current status of all steps in the session.
+* **GetAuditLogQuery**: Retrieves session execution history for debugging and support operations.
 
 ---
 
@@ -309,12 +378,12 @@ The **Execution Session** is defined as the Aggregate Root. It encapsulates the 
 4. Dispatch step commands to external adapters.
 5. Await UpdateStepStatusCommand.
 6. If success, verify invariants, and loop to step 3.
-7. If failure, execute recovery strategy.
+7. If failure, execute recovery strategy or trigger CompensationOrchestrator.
 
 ---
 
 ### 39. Orchestration Strategy
-Use a stateful saga pattern. The coordinator tracks active steps in-memory or in state stores, evaluating prerequisite resolutions before triggering next tasks.
+Use a stateful saga pattern. The coordinator tracks active steps in state stores, evaluating prerequisite resolutions before triggering next tasks.
 
 ---
 
@@ -344,28 +413,28 @@ The Coordinator coordinates actions between the Session Repository, the Step Tra
 
 ### 43. External Capability Contracts
 Adapters must implement standard business contracts:
-* `check_availability(train, date) -> Status`
-* `book_seat(passenger, train, class) -> Confirmation`
-* `cancel_seat(pnr) -> RefundAmount`
+* **Availability Verification Capability**: Inputs: train ID, travel date. Outputs: seat status.
+* **Reservation Capability**: Inputs: passenger credentials, train ID, class, concession tier. Outputs: confirmation code.
+* **Cancellation Capability**: Inputs: PNR, passenger ID. Outputs: refund receipt and cancellation reference.
 
 ---
 
 ### 44. Failure Management Strategy
 Categorize errors at the boundary:
-* **Transient Error (e.g., Network drop)**: Trigger retry policy.
+* **Transient Error (e.g., Network drop)**: Trigger Controlled Retry Policy.
 * **Fatal Error (e.g., Seat Sold Out)**: Stop execution, trigger compensation workflow.
-* **System Failure (e.g., Adapter crashed)**: Pause execution, await operator review.
+* **System Failure (e.g., Adapter crashed)**: Pause execution, publish ManualInterventionRequested, and await operator review.
 
 ---
 
 ### 45. Recovery Strategy
-* **Retry Policy**: Maximum 3 attempts with progressive delay.
+* **Controlled Retry Policy**: Maximum 3 attempts with progressive delay (exponential backoff with jitter).
 * **Alternate Path**: If a preferred class is unavailable, check if the travel plan contains a configured fallback (e.g., alternative class or route).
 
 ---
 
 ### 46. Idempotency Strategy
-Generate a unique execution token for each transaction. Downstream adapters must verify that this token has not been processed before executing booking actions.
+Generate a unique ExecutionToken value object for each transaction. Downstream adapters must verify that this token has not been processed before executing booking actions.
 
 ---
 
@@ -390,6 +459,45 @@ Compile step outcomes into a final execution report containing confirmation numb
 ---
 
 ## PART 2C — Enterprise Architecture
+
+### 50a. Quality Attribute Scenarios
+
+#### Availability Scenario (QAS-AVAIL-01)
+* **Source**: User request.
+* **Stimulus**: Attempting to book a ticket during peak travel season.
+* **Environment**: High concurrency transaction spikes.
+* **Response**: The active-passive coordinator setup switches to passive within 2 seconds of node heartbeat failure.
+* **Metric**: Session continues executing without data loss.
+
+#### Reliability Scenario (QAS-RELI-01)
+* **Source**: Network failure.
+* **Stimulus**: Downstream API timeout during connecting booking leg 2.
+* **Environment**: Partially complete transaction state (leg 1 booked).
+* **Response**: System halts leg 3, initiates CompensationOrchestrator to trigger Cancellation Capability on leg 1 within 5 seconds.
+* **Metric**: Zero orphan bookings left uncompensated.
+
+#### Performance Scenario (QAS-PERF-01)
+* **Source**: Orchestration dispatch.
+* **Stimulus**: Processing state transitions.
+* **Environment**: In-memory execution evaluation.
+* **Response**: The step execution evaluator completes prerequisite checks.
+* **Metric**: Latency overhead of core coordination logic is under 5ms.
+
+#### Security Scenario (QAS-SEC-01)
+* **Source**: Log parser or malicious actor.
+* **Stimulus**: Accessing transaction audit logs.
+* **Environment**: Standard operational tracking.
+* **Response**: All passenger credit cards and identity numbers are masked.
+* **Metric**: Zero leak of PII/Credentials.
+
+#### Recoverability Scenario (QAS-RECO-01)
+* **Source**: Worker process crash.
+* **Stimulus**: Node restart.
+* **Environment**: Multiple active sessions in processing state.
+* **Response**: Supervisor reloads incomplete sessions from database, recovers execution states, and resumes steps.
+* **Metric**: Recovery of all processing sessions within 10 seconds of restart.
+
+---
 
 ### 51. Security Architecture
 * **Data Masking**: Passenger credentials must be masked in audit logs.
@@ -484,6 +592,21 @@ Ensure that updates to execution contracts do not break active sessions currentl
 * **Decision**: Generate execution tokens at start, validated by downstream adapters.
 * **Rationale**: Eliminates double-booking and double-billing risk.
 
+#### ADR-M6.4-003: Compensation Strategy
+* **Context**: Mid-execution failures leave active bookings active.
+* **Decision**: Execute compensating commands in reverse chronological order of execution.
+* **Rationale**: Safely undoes bookings without leaving intermediate orphan states.
+
+#### ADR-M6.4-004: Execution State Model
+* **Context**: Session failures must not block the main runtime loop.
+* **Decision**: Model execution states as a finite state machine inside the Execution Session aggregate.
+* **Rationale**: Ensures deterministic transitions and blocks invalid lifecycle changes.
+
+#### ADR-M6.4-005: Boundary Isolation
+* **Context**: External API failures must not compromise core engine stability.
+* **Decision**: Isolate core logic from external endpoints using the abstract Adapter pattern.
+* **Rationale**: Insulates domain invariants from partner API changes and protocol drift.
+
 ---
 
 ### 68. Risk Register
@@ -508,7 +631,11 @@ Avoid custom retry code in adapters; consolidate all policy checks inside the ce
 ---
 
 ### 71. Architecture Governance
-Any modifications to the state model or execution rules require review by the Technical Governance Board.
+* **Architecture Ownership**: Governed by the Principal Enterprise Architect.
+* **Review Process**: Architectural compliance is validated by the ARB board at the end of each milestone.
+* **Approval Chain**: Sign-offs are required from the Technical Design Authority and Product Sponsor before implementation begins.
+* **Decision Authority**: Technical Governance Board holds veto authority over API interface contracts and state transitions.
+* **Architecture Lifecycle**: Reevaluated quarterly to determine suitability for multi-provider extensions.
 
 ---
 
@@ -521,4 +648,8 @@ This document satisfies all requirements of the Enterprise Planning Standard v3.
 The technical architecture for Milestone 6.4 (Execution Engine) is formally **FROZEN** and serves as the baseline for implementation.
 
 STATUS:
+State: Frozen
+Verdict: Approved
+Signature: Technical Design Authority
+
 ✅ APPROVED FOR ARCHITECTURE FREEZE
