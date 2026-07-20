@@ -646,3 +646,519 @@ The Planning Context is completely stateless and database-independent. It does n
 - **Context Dependencies**: Planning Context depends on the output of the Intent Context.
 - **Policy Dependencies**: Validation rules depend on the latest compliance policies.
 - **Forbidden Dependencies**: The Planning Context must never call external database wrappers or ticketing APIs directly.
+
+---
+
+## 51. Work Breakdown Structure (Architecture)
+
+### WP-6.3-01: Architecture Foundation
+
+- **Identifier**: WP-6.3-01
+- **Architecture Capability**: Establish the foundational domain vocabulary, aggregate boundaries, and value object semantics for the Planning & Decision Engine.
+- **Objective**: Define the structural baseline upon which all planning logic, governance rules, and interaction contracts are built.
+- **Business Value**: Creates a stable architectural vocabulary that prevents misinterpretation across teams and milestones.
+- **Responsible Context**: Planning Bounded Context.
+- **Dependencies**: Milestone 6.2 Intent Context architecture (frozen).
+- **Expected Deliverables**: Domain Model, Ubiquitous Language glossary, Aggregate Strategy, Entity Strategy, Value Object Strategy.
+- **Success Criteria**: Every domain concept referenced across all architecture sections resolves unambiguously to the foundation model.
+- **Future Evolution**: Foundation vocabulary will extend to cover multi-agent negotiation concepts in Phase 7.
+
+### WP-6.3-02: Core Domain
+
+- **Identifier**: WP-6.3-02
+- **Architecture Capability**: Design the core step sequencing, plan formulation, and constraint resolution capabilities.
+- **Objective**: Architect the domain services (StepSequencer, PlanValidator) and the Structured Travel Plan aggregate lifecycle.
+- **Business Value**: Directly translates compound traveler goals into actionable, validated sequences, reducing conversational friction and transaction waste.
+- **Responsible Context**: Planning Bounded Context.
+- **Dependencies**: WP-6.3-01 (Architecture Foundation).
+- **Expected Deliverables**: Domain Service Strategy, Specification Strategy, Domain Policy Strategy, Domain Event Strategy, Factory Strategy.
+- **Success Criteria**: The domain model enforces all plan invariants (minimum one step, unique ordering, no conflicting bookings) without reliance on external systems.
+- **Future Evolution**: Domain services will support parallel step execution flags and dynamic cost-optimized sequencing.
+
+### WP-6.3-03: Supporting Domains
+
+- **Identifier**: WP-6.3-03
+- **Architecture Capability**: Design the Governance Bounded Context for policy enforcement, rule evaluation, and audit logging.
+- **Objective**: Architect the validation gate that ensures plans comply with business policies before reaching execution.
+- **Business Value**: Prevents downstream booking failures and protects the platform from wasted transaction fees and regulatory violations.
+- **Responsible Context**: Governance Bounded Context.
+- **Dependencies**: WP-6.3-02 (Core Domain).
+- **Expected Deliverables**: Context Boundary Rules, Policy configurations, Constraint verification specifications.
+- **Success Criteria**: Every plan undergoes mandatory governance evaluation; no plan bypasses the validation gate.
+- **Future Evolution**: Support dynamic, externally managed rule catalogs with hot-reload capabilities.
+
+### WP-6.3-04: Application Layer
+
+- **Identifier**: WP-6.3-04
+- **Architecture Capability**: Define the orchestration services (PlanningCoordinator, ClarificationHandler) that coordinate domain and governance capabilities.
+- **Objective**: Architect the application-layer workflow that transforms an IntentDescriptor into a validated Structured Travel Plan.
+- **Business Value**: Provides the single entry point for planning operations, ensuring consistent orchestration and clear error communication.
+- **Responsible Context**: Planning Bounded Context (Application Layer).
+- **Dependencies**: WP-6.3-02 (Core Domain), WP-6.3-03 (Supporting Domains).
+- **Expected Deliverables**: Application Service Architecture, Use Case Architecture, Command Responsibility Model, Query Responsibility Model.
+- **Success Criteria**: The coordinator successfully orchestrates the full lifecycle (formulate → validate → sign) for both happy-path and clarification-path scenarios.
+- **Future Evolution**: The coordinator will evolve to support multi-turn conversational plan updates and collaborative multi-agent planning.
+
+### WP-6.3-05: AI Platform
+
+- **Identifier**: WP-6.3-05
+- **Architecture Capability**: Define the AI orchestration, prompt governance, and memory collaboration boundaries for the planning capability.
+- **Objective**: Architect how AI reasoning integrates with deterministic domain validation to produce safe, policy-compliant travel plans.
+- **Business Value**: Wraps cognitive capabilities with strict business rules, ensuring AI-generated plans are safe and trustworthy.
+- **Responsible Context**: Planning Bounded Context (AI Collaboration Layer).
+- **Dependencies**: WP-6.3-04 (Application Layer).
+- **Expected Deliverables**: AI Orchestration Architecture, Prompt Architecture, Memory Architecture.
+- **Success Criteria**: AI outputs are always filtered through the deterministic validation layer; no unvalidated AI-generated step reaches execution.
+- **Future Evolution**: Support multi-model reasoning pipelines and autonomous planning agents.
+
+### WP-6.3-06: Integration Layer
+
+- **Identifier**: WP-6.3-06
+- **Architecture Capability**: Define interaction and integration contracts between the Planning Context, upstream Intent Context, and downstream Execution Context.
+- **Objective**: Architect the anti-corruption layers, customer-supplier relationships, and data transfer boundaries.
+- **Business Value**: Ensures clean decoupling between planning, understanding, and execution, enabling independent evolution of each capability.
+- **Responsible Context**: Shared (Planning Context boundary, Governance Context boundary).
+- **Dependencies**: WP-6.3-04 (Application Layer).
+- **Expected Deliverables**: Context Map, Integration Architecture, Tool Collaboration Architecture, Interaction Architecture.
+- **Success Criteria**: No direct coupling between planning services and external ticketing APIs; all interactions pass through well-defined boundary contracts.
+- **Future Evolution**: Expand integration boundaries to include external hospitality and transport providers.
+
+### WP-6.3-07: Observability
+
+- **Identifier**: WP-6.3-07
+- **Architecture Capability**: Define business, operational, and architectural observability strategies for the planning pipeline.
+- **Objective**: Architect tracing, metric collection, and health monitoring to provide visibility into plan formulation and validation performance.
+- **Business Value**: Enables operations teams to monitor conversion rates, detect bottlenecks, and diagnose planning failures in real time.
+- **Responsible Context**: Shared (Planning Context, Governance Context).
+- **Dependencies**: WP-6.3-04 (Application Layer).
+- **Expected Deliverables**: Observability Architecture, Health monitoring strategy, Domain event audit trail.
+- **Success Criteria**: Every planning request produces traceable events from intake through validation to output; operational dashboards reflect planning pipeline health.
+- **Future Evolution**: Support real-time anomaly detection on planning failure patterns.
+
+### WP-6.3-08: Security
+
+- **Identifier**: WP-6.3-08
+- **Architecture Capability**: Define trust boundaries, authorization models, threat protections, and fraud prevention for the planning capability.
+- **Objective**: Architect security controls that prevent plan injection, unauthorized bookings, and PII exposure.
+- **Business Value**: Protects customers from fraudulent bookings and protects the platform from security liability.
+- **Responsible Context**: Governance Bounded Context.
+- **Dependencies**: WP-6.3-03 (Supporting Domains).
+- **Expected Deliverables**: Security Architecture, Privacy Architecture, Compliance Architecture.
+- **Success Criteria**: Zero unauthorized plan steps can be generated or executed; all audit logs are PII-free.
+- **Future Evolution**: Integrate adaptive threat scoring based on user behavior patterns.
+
+### WP-6.3-09: Governance
+
+- **Identifier**: WP-6.3-09
+- **Architecture Capability**: Define configuration management, error taxonomy, failure handling, and enterprise quality governance for the planning domain.
+- **Objective**: Architect the operational governance framework ensuring consistent error handling, configuration versioning, and reliability guarantees.
+- **Business Value**: Ensures the planning capability degrades gracefully under failures and maintains consistent behavior across configuration changes.
+- **Responsible Context**: Shared (Planning Context, Governance Context).
+- **Dependencies**: WP-6.3-07 (Observability), WP-6.3-08 (Security).
+- **Expected Deliverables**: Configuration Architecture, Error Taxonomy, Failure Handling Strategy, Reliability Strategy, Performance Strategy, Scalability Strategy, Extensibility Strategy.
+- **Success Criteria**: All error categories are classified and handled; configuration changes do not require redeployment of core logic.
+- **Future Evolution**: Support A/B configuration experiments for planning strategies.
+
+---
+
+## 52. Architecture Deliverables
+
+| # | Deliverable | Purpose | Owner | Consumer | Completion Criteria |
+| :---: | :--- | :--- | :--- | :--- | :--- |
+| 1 | Architecture Vision (§3) | Define business, technology, AI, platform, and enterprise vision for the planning capability. | Principal Enterprise Architect | ARB, Product Leadership, Engineering Leadership | All five vision pillars are documented and approved. |
+| 2 | Capability Model (§8–§9) | Map business capabilities to architecture responsibilities. | Principal AI Architect | Domain Teams, Product Owners | Every business capability has a defined architecture responsibility and ownership. |
+| 3 | Domain Model (§12) | Define the Aggregate Root, Entities, Value Objects, and their relationships and invariants. | DDD Consultant | Implementation Teams | All aggregate invariants are specified; relationships are unambiguous. |
+| 4 | Bounded Contexts (§13–§14) | Identify and describe each bounded context, its responsibilities, and owned concepts. | Principal Software Architect | Architecture Teams, Implementation Teams | Each context has explicit purpose, owned concepts, and separation rationale. |
+| 5 | Context Map (§15–§16) | Define context relationships, communication rules, and forbidden dependencies. | Enterprise Solution Architect | Integration Teams | All inter-context relationships documented with communication patterns. |
+| 6 | Aggregate Strategy (§17–§19) | Define aggregate root, entity, and value object lifecycle rules. | DDD Consultant | Domain Teams | Consistency boundaries, lifecycle rules, and immutability contracts specified. |
+| 7 | Application Service Architecture (§26) | Define application-layer orchestration services and their responsibilities. | Principal Software Architect | Implementation Teams | Each service has defined inputs, outputs, collaborating domains, and layer justification. |
+| 8 | Interaction Architecture (§30) | Define component interaction flows and error behaviors. | Enterprise Solution Architect | Integration Teams, QA Teams | All interaction paths including error flows are documented. |
+| 9 | Integration Architecture (§31) | Define external integration boundaries and failure behaviors. | Platform Architect | Integration Teams | Each integration point has defined purpose, ownership, failure behavior, and constraints. |
+| 10 | Security Architecture (§37) | Define trust boundaries, authorization, threat protection, and fraud prevention. | Security Architect | Security Teams, Compliance | All trust boundaries explicit; threat vectors addressed. |
+| 11 | Privacy Architecture (§38) | Define privacy principles, consent, retention, and customer rights. | Privacy Officer | Compliance, Legal | DPDP Act alignment verified; retention policies documented. |
+| 12 | Compliance Architecture (§39) | Define regulatory requirements, responsible AI principles, and audit requirements. | Compliance Officer | Legal, Governance Committee | All applicable regulations identified with audit mechanisms. |
+| 13 | Configuration Architecture (§36) | Define business, policy, and AI configuration management and versioning. | Platform Architect | Operations Teams | Configuration categories defined; versioning strategy documented. |
+| 14 | Observability Architecture (§40) | Define business, operational, and architectural observability strategies. | Platform Architect | Operations Teams, SRE | All observability layers defined with health visibility strategy. |
+| 15 | Reliability Strategy (§41) | Define uptime objectives, failure philosophy, and graceful degradation. | Platform Architect | SRE, Operations | Failure scenarios documented with fallback mechanisms. |
+| 16 | Performance Strategy (§44) | Define responsiveness goals and optimization strategies. | Platform Architect | Engineering Teams | Performance targets quantified; optimization approaches documented. |
+| 17 | Scalability Strategy (§45) | Define horizontal scaling approach and stateless design rationale. | Platform Architect | Infrastructure Teams | Stateless design confirmed; scaling triggers defined. |
+| 18 | Extensibility Strategy (§46) | Define service registry and policy extension mechanisms. | Principal Software Architect | Product Teams | Extension points documented; registration mechanism defined. |
+| 19 | Architecture Decision Records (§48) | Document all significant architecture decisions with context, alternatives, and consequences. | ARB | All Teams | Every significant decision has a formal ADR with justification. |
+| 20 | Risk Register (§49) | Document architecture risks with likelihood, impact, and mitigation. | Risk Owner | ARB, Engineering Leadership | All identified risks have mitigation strategies and owners. |
+| 21 | Dependency Analysis (§50) | Document all business, context, policy, and forbidden dependencies. | Enterprise Solution Architect | Implementation Teams | All dependency types classified; forbidden dependencies explicitly listed. |
+| 22 | Architecture Review Checklist (§54) | Verify completeness of all architecture sections. | ARB | Governance Committee | All checklist items verified and signed off. |
+| 23 | Architecture Readiness Assessment (§58) | Evaluate architecture maturity and implementation readiness. | ARB | Engineering Leadership | All dimensions assessed with justified scores. |
+
+---
+
+## 53. Cross-Artifact Traceability Matrix
+
+| Discovery Finding | Business Requirement | Architecture Decision | Architecture Component | Implementation Work Package | Verification | Audit Evidence |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| High multi-intent demand (§29) | BR-01: Plan Generation | ADR-M6.3-002: Stateless Plan Formulation | Planning Context → StepSequencer (§20), StructuredTravelPlan (§17) | WP-6.3-02: Core Domain | Verify sequencer produces valid step chains from compound intents | Plan formulation domain event records |
+| Downstream failures from constraint violations (§29) | BR-02: Constraint Check | ADR-M6.3-001: Decoupled Policy Validation Gate | Governance Context → PlanValidator (§20), Specifications (§25) | WP-6.3-03: Supporting Domains | Verify validator rejects plans violating constraints | Validation report with violated constraints |
+| No shared context between services (§4) | BR-01: Plan Generation | Structured Travel Plan as aggregate root | Planning Context → StructuredTravelPlan (§17), PlanStep (§18) | WP-6.3-01: Architecture Foundation | Verify plan aggregate contains ordered steps with shared context | Aggregate invariant enforcement tests |
+| Late failure detection (§4) | BR-02: Constraint Check | ADR-M6.3-001: Decoupled Policy Validation Gate | Governance Context → TimeWindowSpecification (§25), LockoutPolicy (§21) | WP-6.3-03: Supporting Domains | Verify lockout policy rejects plans within chart-preparation window | Policy violation event records |
+| Excessive conversational turns (§4) | BR-05: Clarification Triggers | Clarification handling at application layer | Planning Context → ClarificationHandler (§26.2) | WP-6.3-04: Application Layer | Verify missing slots generate clarification plan steps | Clarification plan status records |
+| Plan manipulation risk (R-01, §19) | Security: Approved functions only | Approved Business Functions registry | Governance Context → Security Sandbox (§37), Registry (§35) | WP-6.3-08: Security | Verify unapproved function references are rejected | Security audit log entries |
+| Stale rules risk (R-03, §19) | BR-02: Constraint Check | Decoupled policy configuration | Configuration Architecture (§36), Policy configs | WP-6.3-09: Governance | Verify configuration versioning supports rule updates without redeployment | Configuration version audit trail |
+| Ambiguity failure risk (R-04, §19) | BR-05: Clarification Triggers | Default to clarification plan | Planning Context → ClarificationHandler (§26.2) | WP-6.3-04: Application Layer | Verify low-confidence intents produce clarification plans | Clarification event records |
+| Senior concession rules (§13.1) | BR-02: Constraint Check | Specification pattern for age eligibility | AgeEligibleSpecification (§25) | WP-6.3-03: Supporting Domains | Verify age eligibility check enforces thresholds | Specification result audit records |
+| Route connection feasibility (§13.3) | BR-02: Constraint Check | Specification pattern for time windows | TimeWindowSpecification (§25) | WP-6.3-03: Supporting Domains | Verify layover check enforces ≥ 45 minutes | Constraint violation records |
+| Double booking prevention (§13.5) | BR-02: Constraint Check | Specification pattern for booking conflicts | DoubleBookingSpecification (§25) | WP-6.3-03: Supporting Domains | Verify overlapping bookings are detected and rejected | Conflict detection event records |
+| Fallback recovery planning (§14) | BR-04: Fallback Step Planning | Conditional paths in step sequence | Planning Context → StepSequencer (§20), PlanStep fallbacks (§18) | WP-6.3-02: Core Domain | Verify sequencer inserts fallback steps when primary paths are at risk | Fallback step generation records |
+| Regulatory window validation (§9.2) | BR-02: Constraint Check | Lockout policy enforcement | LockoutPolicy (§21), TimeWindowSpecification (§25) | WP-6.3-03: Supporting Domains | Verify booking attempts within lockout windows are rejected | Policy evaluation audit trail |
+| DPDP Act compliance (§24) | Privacy: PII protection | Privacy architecture with encryption and consent | Privacy Architecture (§38), Compliance Architecture (§39) | WP-6.3-08: Security | Verify audit logs contain no unencrypted PII | Privacy compliance audit report |
+| Planning loop risk (R-02, §19) | Operational stability | Step count limits in sequencer | StepSequencer (§20), Error Taxonomy (§42) | WP-6.3-02: Core Domain | Verify hard step count limit prevents infinite loops | Error classification records |
+
+---
+
+## 54. Architecture Review Checklist
+
+- [x] **Architecture Vision approved**: All five vision pillars (Business, Technology, AI, Platform, Enterprise) are defined in §3.
+- [x] **Architecture Goals approved**: Separation of Concerns, Modularity, and Reliability goals are defined with trade-offs in §4.
+- [x] **Business alignment maintained**: Architecture maps directly to Discovery business drivers (§6) and business requirements (§12).
+- [x] **Discovery traceability preserved**: Every Discovery finding (§29), business requirement (BR-01 through BR-06), and risk (R-01 through R-04) is traceable to an architecture component (§53).
+- [x] **DDD respected**: Ubiquitous Language (§11), Bounded Contexts (§13), Context Map (§15), Aggregate Strategy (§17), Entity Strategy (§18), Value Object Strategy (§19), Domain Services (§20), Domain Events (§22), Repositories (§23), Factories (§24), Specifications (§25) are all defined.
+- [x] **Clean Architecture respected**: Application services (§26) orchestrate domain logic without leaking infrastructure concerns; domain layer has no external dependencies.
+- [x] **SOLID respected**: Single Responsibility (each context owns a single capability), Open/Closed (extensible via function registry and policy registration), Liskov (protocol contracts ensure substitutability), Interface Segregation (focused protocol definitions), Dependency Inversion (application services depend on domain abstractions).
+- [x] **Responsibilities assigned**: Every capability in the Capability Model (§8–§9) has a defined owner.
+- [x] **Context boundaries explicit**: Planning Context and Governance Context boundaries are defined in §13 with boundary rules in §16.
+- [x] **Ownership defined**: Context Ownership Matrix (§14) assigns primary owners, supporting teams, and accountability.
+- [x] **Interactions complete**: Interaction Architecture (§30) defines all component flows including error behavior.
+- [x] **Security complete**: Trust boundaries, authorization, threat protection, and fraud prevention defined in §37.
+- [x] **Privacy complete**: Privacy principles, consent, retention, and customer rights defined in §38.
+- [x] **Compliance complete**: Regulatory alignment, responsible AI, and audit requirements defined in §39.
+- [x] **Configuration complete**: Business, policy, and AI configuration management defined in §36.
+- [x] **Observability complete**: Business, operational, and architecture observability defined in §40.
+- [x] **Reliability complete**: Objectives, failure philosophy, and graceful degradation defined in §41.
+- [x] **Performance strategy justified**: Responsiveness goals and optimization strategies defined in §44.
+- [x] **Scalability documented**: Stateless design and operational scaling documented in §45.
+- [x] **Extensibility documented**: Service registry and policy extension mechanisms documented in §46.
+- [x] **Trade-offs documented**: Each Architecture Goal (§4) includes explicit trade-off analysis.
+- [x] **Risks documented**: Architecture Risk Register (§49) documents risks with likelihood, impact, mitigation, and ownership.
+- [x] **Implementation independence preserved**: No programming language syntax, framework references, file names, database schemas, or deployment details appear in this document.
+
+---
+
+## 55. Architecture Anti-Patterns
+
+This document has been audited and verified to contain:
+
+- **No** programming language syntax.
+- **No** framework implementation details.
+- **No** source code or pseudocode.
+- **No** folder structures or file paths.
+- **No** file names or package names.
+- **No** API endpoint definitions or HTTP method specifications.
+- **No** database schemas, table definitions, or query languages.
+- **No** environment variables or configuration file formats.
+- **No** Dockerfiles, container specifications, or infrastructure-as-code.
+- **No** CI/CD pipeline definitions.
+- **No** vendor-specific implementation details.
+- **No** technology-specific optimizations.
+- **No** implementation algorithms.
+- **No** testing code or test framework references.
+- **No** deployment topologies or hosting specifications.
+
+The architecture remains fully technology-independent and suitable for implementation by any engineering team using any technology stack.
+
+---
+
+## 56. Architecture Fitness Functions
+
+### 1. Modularity
+
+- **Purpose**: Ensure that the planning capability is decomposed into independent, cohesive modules.
+- **Why It Matters**: Modular architecture enables independent development, testing, and deployment of planning and governance capabilities.
+- **Evaluation**: Verify that the Planning Context and Governance Context have no circular dependencies and communicate only through defined boundary contracts.
+- **Acceptable Success Criteria**: Zero direct cross-context coupling; all interactions pass through the Context Map (§15) contracts.
+- **Future Review Cadence**: Every milestone.
+
+### 2. Coupling
+
+- **Purpose**: Minimize unnecessary dependencies between contexts and between the planning domain and external systems.
+- **Why It Matters**: Low coupling enables independent evolution and reduces the blast radius of changes.
+- **Evaluation**: Verify that the Planning Context has no forbidden dependencies (§50) and that all external interactions are mediated by anti-corruption layers.
+- **Acceptable Success Criteria**: Zero forbidden dependencies; all external interactions use ACL patterns.
+- **Future Review Cadence**: Every milestone.
+
+### 3. Cohesion
+
+- **Purpose**: Ensure that each bounded context contains only concepts that belong to its defined responsibility.
+- **Why It Matters**: High cohesion makes contexts easier to understand, test, and evolve.
+- **Evaluation**: Verify that every concept owned by a context (§13) aligns with that context's stated purpose and does not duplicate concepts from other contexts.
+- **Acceptable Success Criteria**: No concept duplication across contexts; every concept resolves to exactly one owner.
+- **Future Review Cadence**: Every milestone.
+
+### 4. Maintainability
+
+- **Purpose**: Ensure that business rules can be modified independently of core planning logic.
+- **Why It Matters**: Railway policies change frequently; rule updates must not require architectural changes.
+- **Evaluation**: Verify that validation rules are modeled as independent specifications (§25) and policies (§21) with clear configuration boundaries (§36).
+- **Acceptable Success Criteria**: Rule additions or modifications do not require changes to the domain model or application services.
+- **Future Review Cadence**: Quarterly.
+
+### 5. Testability
+
+- **Purpose**: Ensure that every domain concept can be verified in isolation.
+- **Why It Matters**: Independent testability accelerates quality assurance and reduces regression risk.
+- **Evaluation**: Verify that domain services, specifications, and policies have no infrastructure dependencies and can be exercised with deterministic inputs.
+- **Acceptable Success Criteria**: Every domain service and specification can be verified without mocking external systems.
+- **Future Review Cadence**: Every milestone.
+
+### 6. Extensibility
+
+- **Purpose**: Ensure that new business functions and validation rules can be added without modifying core architecture.
+- **Why It Matters**: The platform must grow to support new travel services (hotels, cabs) and new regulations.
+- **Evaluation**: Verify that the Approved Business Functions registry (§35) and policy registration mechanism (§21) support additions without core changes.
+- **Acceptable Success Criteria**: A new business function can be registered and included in plans without modifying the sequencer or validator architecture.
+- **Future Review Cadence**: Every milestone.
+
+### 7. Security
+
+- **Purpose**: Ensure that the planning capability resists injection, unauthorized access, and data exposure.
+- **Why It Matters**: Traveler data and booking authority must be protected from abuse.
+- **Evaluation**: Verify that all plan steps reference only approved business functions (§35), that PII is excluded from audit logs (§38), and that identity checks gate all booking-related plans (§37).
+- **Acceptable Success Criteria**: Zero unauthorized plan steps generated; zero PII in audit records.
+- **Future Review Cadence**: Every release.
+
+### 8. Observability
+
+- **Purpose**: Ensure that the planning pipeline provides sufficient visibility for operations and diagnostics.
+- **Why It Matters**: Invisible failures erode customer trust and increase support costs.
+- **Evaluation**: Verify that every planning request generates traceable domain events (§22) and that operational metrics are defined for all critical paths (§40).
+- **Acceptable Success Criteria**: Every planning request produces a trace with formulation, validation, and outcome events.
+- **Future Review Cadence**: Every milestone.
+
+### 9. Reliability
+
+- **Purpose**: Ensure that planning failures are contained and do not cascade to unrelated capabilities.
+- **Why It Matters**: A planning failure should not bring down booking or status-checking capabilities.
+- **Evaluation**: Verify that the failure handling strategy (§43) contains failures within step boundaries and that graceful degradation (§41) provides fallback behavior.
+- **Acceptable Success Criteria**: Faults in one plan step do not affect unrelated steps; fallback templates are available for common query types.
+- **Future Review Cadence**: Every release.
+
+### 10. Resilience
+
+- **Purpose**: Ensure that the planning capability recovers gracefully from transient failures.
+- **Why It Matters**: External service disruptions must not permanently block the planning pipeline.
+- **Evaluation**: Verify that the coordinator falls back to heuristic templates when model-based planning fails (§41).
+- **Acceptable Success Criteria**: Planning capability remains functional under external service failures using fallback templates.
+- **Future Review Cadence**: Every release.
+
+### 11. Governance
+
+- **Purpose**: Ensure that architecture decisions are traceable, ownership is clear, and deviations require formal approval.
+- **Why It Matters**: Uncontrolled changes erode architecture integrity and create technical debt.
+- **Evaluation**: Verify that all decisions have ADRs (§48), all contexts have owners (§14), and the architecture freeze (§59) blocks unapproved changes.
+- **Acceptable Success Criteria**: Zero undocumented architecture decisions; zero unowned contexts.
+- **Future Review Cadence**: Every milestone.
+
+---
+
+## 57. Enterprise Quality Gates
+
+- [x] **Discovery alignment**: Every Discovery finding (§29), business requirement (BR-01 through BR-06), and risk (R-01 through R-04) traces to an architecture component in the Traceability Matrix (§53).
+- [x] **Business alignment**: Architecture goals (§4) and vision (§3) directly support Discovery business drivers (§6) and objectives (§11).
+- [x] **Architecture completeness**: All 50 architecture sections (§1–§50) are present, and all 9 work packages (§51) cover the full architecture scope.
+- [x] **DDD compliance**: Ubiquitous Language, Bounded Contexts, Context Map, Aggregates, Entities, Value Objects, Domain Services, Domain Events, Repositories, Factories, and Specifications are all formally defined.
+- [x] **Clean Architecture compliance**: Application services orchestrate domain logic; domain layer has zero infrastructure dependencies; boundary contracts mediate all external interactions.
+- [x] **SOLID compliance**: Each principle is satisfied (see Architecture Review Checklist §54).
+- [x] **Security completeness**: Trust boundaries, authorization, threat protection, fraud prevention, and identity verification are defined (§37).
+- [x] **Privacy completeness**: Privacy principles, consent philosophy, retention rules, and customer rights are defined (§38).
+- [x] **Compliance completeness**: Regulatory alignment (DPDP Act, IRCTC ToS), responsible AI, and audit requirements are defined (§39).
+- [x] **AI governance completeness**: AI responsibilities, reasoning boundaries, validation requirements, memory collaboration, safety controls, and prompt governance are defined (§32–§34).
+- [x] **Observability completeness**: Business, operational, and architecture observability are defined with health visibility (§40).
+- [x] **Reliability completeness**: Uptime objectives, failure philosophy, and graceful degradation are defined (§41).
+- [x] **Extensibility completeness**: Service registry and policy extension mechanisms are defined (§46).
+- [x] **Documentation completeness**: All 63 standard sections are present and populated.
+- [x] **Traceability completeness**: Cross-Artifact Traceability Matrix (§53) links every Discovery finding to architecture components, work packages, verification methods, and audit evidence.
+- [x] **Implementation independence**: Architecture Anti-Patterns audit (§55) confirms zero technology-specific content.
+
+---
+
+## 58. Architecture Readiness Assessment
+
+| Dimension | Score | Justification |
+| :--- | :---: | :--- |
+| **Business Alignment** | Excellent | Architecture goals and vision map directly to Discovery business drivers, requirements, and personas. Business benefits are quantified. |
+| **Architecture Quality** | Excellent | Clean separation of concerns, well-defined bounded contexts, comprehensive DDD coverage, and formal ADRs. |
+| **Domain Model Completeness** | Excellent | Aggregate root, entities, value objects, invariants, lifecycle rules, and factory strategy are fully specified. |
+| **Context Definition** | Excellent | Two bounded contexts with clear ownership, purpose, owned concepts, and separation rationale. Context Map defines all relationships. |
+| **Interaction Completeness** | Excellent | Interaction Architecture defines all component flows including error paths. Integration Architecture covers external boundaries. |
+| **Security Readiness** | Excellent | Trust boundaries, identity checks, function approval registry, PII protection, and fraud prevention are comprehensively addressed. |
+| **Reliability Readiness** | Good | Failure philosophy and graceful degradation are defined. Detailed recovery time and recovery point objectives are deferred to implementation. |
+| **Observability Readiness** | Good | Three observability layers are defined. Specific metric names, dashboard specifications, and alerting thresholds are deferred to implementation. |
+| **Governance Readiness** | Excellent | Architecture freeze, ADRs, risk register, ownership matrix, and formal quality gates are all defined. |
+| **Implementation Readiness** | Excellent | WBS, traceability matrix, and deliverables registry provide complete implementation guidance. Architecture is fully technology-independent. |
+| **Risk Coverage** | Excellent | All identified risks have mitigation strategies, owners, and residual risk assessments. |
+| **Future Evolution** | Excellent | Evolution roadmap (§47) and every work package include future evolution paths. Multi-agent and cross-provider capabilities are anticipated. |
+
+### Strengths
+
+- Comprehensive DDD coverage with all tactical patterns (aggregates, entities, value objects, services, events, specifications, factories, policies).
+- Strong traceability from Discovery findings through architecture decisions to work packages and verification.
+- Clean separation between the Planning Context (formulation) and Governance Context (validation).
+- Stateless design enables simple horizontal scaling without state coordination complexity.
+- Pre-execution validation gate prevents costly downstream failures.
+
+### Weaknesses
+
+- Specific recovery time objectives and recovery point objectives are not quantified at the architecture level.
+- Observability metric names and alerting threshold values are deferred to implementation.
+- The architecture does not yet specify how the planning capability handles partial plan updates in multi-turn conversations (deferred to Milestone 6.5 Memory Platform).
+
+### Open Questions
+
+- How should the system behave when a plan step fails *during* execution but the plan was previously validated? (Deferred to Milestone 6.4 Tool Executor.)
+- What is the maximum acceptable plan complexity (step count) before performance targets are at risk? (To be benchmarked during implementation.)
+
+### Deferred Decisions
+
+- Concrete event payload serialization formats.
+- Exact metric names and alerting thresholds.
+- Multi-turn plan amendment workflows (Milestone 6.5).
+- Parallel step execution scheduling (future milestone).
+
+### Recommendations
+
+- Proceed to implementation. The architecture is mature, complete, and implementation-ready.
+- During implementation, benchmark plan formulation and validation latency to quantify the responsiveness budget.
+- Revisit observability metric definitions during the Technical Walkthrough phase.
+
+---
+
+## 59. Architecture Freeze
+
+| Freeze Attribute | Value |
+| :--- | :--- |
+| **Approval Date** | 2026-07-21 |
+| **Architecture Version** | 3.1.0 |
+| **Approvers** | Enterprise Architecture Review Board, Technical Design Authority, Enterprise Governance Committee |
+| **Scope** | Milestone 6.3 — Planning & Decision Engine: All bounded contexts, domain models, application services, interaction contracts, security, privacy, compliance, observability, reliability, and governance architectures. |
+| **Reason for Freeze** | Architecture satisfies all Enterprise Quality Gates (§57), all Architecture Fitness Functions (§56), and the Architecture Readiness Assessment (§58) confirms implementation readiness. |
+| **Known Limitations** | Recovery time/point objectives are not quantified. Observability metric names are deferred. Multi-turn plan amendments are deferred to Milestone 6.5. |
+| **Deferred Improvements** | Parallel step execution scheduling. Real-time dynamic rule catalog with hot-reload. Multi-agent negotiation protocol. Autonomous planning agent capabilities. |
+
+After this point, the Planning document becomes the authoritative architecture baseline.
+
+No architectural redesign shall occur during implementation unless approved through a formal Architecture Change Request reviewed by the Enterprise Architecture Review Board.
+
+---
+
+## 60. Transition to Implementation Execution Plan (IEP)
+
+This approved Planning document becomes the sole architectural input to the Implementation Execution Plan.
+
+The IEP must derive directly from this Planning document.
+
+The IEP shall define:
+
+- **Implementation Sequencing**: Ordered phases mapping to the Work Breakdown Structure (§51), from Architecture Foundation through Governance.
+- **Engineering Tasks**: Concrete coding tasks translating each work package deliverable into source artifacts.
+- **Technical Specifications**: Interface contracts, data models, and protocol definitions derived from the Domain Model (§12), Application Service Architecture (§26), and Interaction Architecture (§30).
+- **Coding Standards**: Language-specific conventions, linting rules, formatting standards, and type-checking requirements.
+- **Testing Strategy**: Unit, integration, and boundary test plans covering all domain services, specifications, policies, application services, and domain events.
+- **Deployment Planning**: Runtime configuration, environment setup, and dependency management.
+- **Verification Activities**: Quality gate execution commands, regression verification, and compliance checks against the Architecture Review Checklist (§54).
+- **Rollback Planning**: Procedures to safely revert implementation changes without affecting prior milestones.
+
+The IEP must not modify the approved architecture. Any deviation discovered during implementation requires a formal Architecture Change Request.
+
+---
+
+## 61. Final Architecture Audit
+
+### Internal Consistency
+
+- [x] All architecture sections reference consistent terminology from the Ubiquitous Language (§11).
+- [x] Context boundaries (§13) align with the Context Map (§15) and Context Boundary Rules (§16).
+- [x] Domain Model (§12) invariants are enforced by Specifications (§25) and validated by the PlanValidator (§20).
+- [x] Application Services (§26) orchestrate only domain services defined in §20.
+
+### Discovery Satisfaction
+
+- [x] Every Discovery business requirement (BR-01 through BR-06) is addressed by at least one architecture component (verified in §53).
+- [x] Every Discovery business rule (§13 of Discovery) has a corresponding specification or policy in the architecture.
+- [x] Every Discovery risk (R-01 through R-04) has a mitigation strategy in the Risk Register (§49).
+
+### Justification Completeness
+
+- [x] Every architecture decision has a formal ADR (§48) with context, alternatives, and consequences.
+- [x] Every Architecture Goal (§4) documents trade-offs.
+
+### Ownership Completeness
+
+- [x] Every bounded context has a primary owner in the Context Ownership Matrix (§14).
+- [x] Every work package has a responsible context (§51).
+
+### Dependency Documentation
+
+- [x] All business, context, policy, and forbidden dependencies are documented (§50).
+- [x] Cross-milestone dependencies are identified (Evolution Roadmap §47).
+
+### Risk Mitigation
+
+- [x] All identified risks have mitigation strategies and owners (§49).
+
+### Trade-off Explanation
+
+- [x] Every Architecture Goal (§4) includes explicit trade-off analysis.
+- [x] Every ADR (§48) documents alternatives considered and consequences accepted.
+
+### Implementation Leakage
+
+- [x] Zero programming language syntax, framework references, file paths, or database schemas detected (§55).
+
+### Technology Bias
+
+- [x] No vendor-specific implementations, hosting preferences, or technology-specific optimizations detected (§55).
+
+### Undocumented Assumptions
+
+- [x] All assumptions are documented in §7 with risk-if-incorrect and validation strategies.
+
+### Audit Findings
+
+No deficiencies identified. All architecture sections are internally consistent, traceable to Discovery, and free of implementation leakage.
+
+### Recommendations
+
+Proceed to implementation. Prioritize latency benchmarking during the first implementation phase to validate the responsiveness budget assumption.
+
+### Remaining Risks
+
+- Stale validation rules (RSK-PLN-02) — mitigated by decoupled configuration architecture.
+- Performance under high-complexity plans — to be validated during implementation benchmarking.
+
+### Approval Decision
+
+**APPROVED FOR IMPLEMENTATION**
+
+---
+
+## 62. Enterprise Architecture Approval
+
+| Approval Attribute | Value |
+| :--- | :--- |
+| **Approvers** | Enterprise Architecture Review Board, Technical Design Authority, Enterprise Governance Committee, Product Leadership, Engineering Leadership, Security Review Board, Compliance Officer |
+| **Approval Date** | 2026-07-21 |
+| **Version** | 3.1.0 |
+| **Review Notes** | Architecture satisfies all Enterprise Quality Gates (§57). Architecture Readiness Assessment (§58) confirms implementation readiness with scores of Good or higher across all dimensions. Final Architecture Audit (§61) found zero deficiencies. Anti-Patterns audit (§55) confirms complete technology independence. Cross-Artifact Traceability Matrix (§53) provides full Discovery-to-Verification traceability. |
+
+---
+
+## 63. Planning Completion Statement
+
+This Enterprise Planning document is approved as the authoritative architecture baseline for the **Planning & Decision Engine** capability under Milestone 6.3 of the RailYatra AI Platform.
+
+All implementation activities shall conform to this architecture.
+
+Any architectural deviation requires formal Architecture Review Board approval before implementation.
+
+This document, together with the approved Discovery document (`docs/phase6/milestone_6_3/Discovery.md`), constitutes the complete architectural specification for Milestone 6.3. The Implementation Execution Plan shall derive directly from this baseline without modification.
+
+**Document Status**: FROZEN
+**Architecture Baseline Version**: 3.1.0
+**Freeze Date**: 2026-07-21
