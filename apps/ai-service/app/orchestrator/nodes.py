@@ -72,11 +72,36 @@ class ClassifierNode(BaseNode):
         logger.info(f"[{state['trace_id']}] Entering ClassifierNode")
 
         try:
+            # Execute classification through legacy/mockable classify method
             res = await intent_classifier.classify(state["message"])
             state["intent"] = res.get("intent", "conversation")
-            # Preserve classifier details in context
+            
+            # Map values to state context for downstream use and backward compatibility
             state["context"]["classifier_confidence"] = res.get("confidence", 0.5)
-            state["context"]["classifier_reason"] = res.get("reason", "")
+            state["context"]["classifier_reason"] = res.get("reason", "Parsed classification output")
+            
+            # Reconstruct intent_descriptor dict from res
+            state["context"]["intent_descriptor"] = {
+                "intent": {
+                    "name": res.get("intent", "conversation"),
+                    "confidence": res.get("confidence", 0.5),
+                    "reason": res.get("reason", "")
+                },
+                "slots": res.get("slots", {}),
+                "context": {
+                    "trace_id": state.get("trace_id", "default-trace"),
+                },
+                "metadata": {
+                    "classifier_type": "model" if res.get("confidence", 0.5) != 1.0 else "heuristic",
+                },
+                "needs_clarification": res.get("needs_clarification", False)
+            }
+            state["context"]["slots"] = {k: v.get("value") if isinstance(v, dict) else v for k, v in res.get("slots", {}).items()}
+            
+            if res.get("needs_clarification", False):
+                logger.warning(f"[{state['trace_id']}] Input requires clarification: {state['message']}")
+                state["context"]["needs_clarification"] = True
+                
         except Exception as e:
             logger.error(f"[{state['trace_id']}] Error in intent classification: {e}")
             state["errors"].append(f"Classification failed: {str(e)}")
@@ -84,6 +109,13 @@ class ClassifierNode(BaseNode):
             state["intent"] = "conversation"
             state["context"]["classifier_confidence"] = 0.0
             state["context"]["classifier_reason"] = f"Error fallback: {str(e)}"
+            state["context"]["intent_descriptor"] = {
+                "intent": {"name": "conversation", "confidence": 0.0, "reason": f"Fallback error: {str(e)}"},
+                "slots": {},
+                "context": {},
+                "metadata": {},
+                "needs_clarification": True
+            }
 
         self._end_timing(state, start_time)
         return state
