@@ -1,12 +1,11 @@
 import unittest
 import asyncio
-from typing import Dict, Any
 
 from app.orchestrator.normalizer import input_normalizer
 from app.orchestrator.slot_extractor import slot_extractor
 from app.orchestrator.evaluator import confidence_evaluator
 from app.orchestrator.classifier import intent_classifier
-from app.orchestrator.types import IntentCandidate, Slot, IntentDescriptor
+from app.orchestrator.types import IntentCandidate, Slot
 
 
 class TestIntentUnderstandingEngine(unittest.TestCase):

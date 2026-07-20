@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 from app.orchestrator.types import Slot
 
 logger = logging.getLogger("ai-service.orchestrator.slot_extractor")
