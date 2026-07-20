@@ -6,7 +6,11 @@ from app.orchestrator.registry import agent_registry
 from app.orchestrator.capabilities import capability_registry, CapabilityMetadata
 from app.orchestrator.events import event_bus, AIEvent
 from app.orchestrator.config import platform_config
-from app.orchestrator.observability import observability_framework, DecisionTrace, CostTrace
+from app.orchestrator.observability import (
+    observability_framework,
+    DecisionTrace,
+    CostTrace,
+)
 from app.orchestrator.policy import policy_engine, governance_layer
 
 
@@ -17,7 +21,9 @@ class MockTestAgent(IAgent):
     async def run(self, user_message: str, context: Dict[str, Any] = None) -> str:
         return f"Mock response to: {user_message}"
 
-    async def run_stream(self, user_message: str, context: Dict[str, Any] = None) -> AsyncIterator[str]:
+    async def run_stream(
+        self, user_message: str, context: Dict[str, Any] = None
+    ) -> AsyncIterator[str]:
         yield f"Mock chunk to: {user_message}"
 
 

@@ -47,7 +47,9 @@ class AgentRegistry(IRegistry):
             f"Successfully registered agent: key='{key}' class='{agent.__class__.__name__}'"
         )
 
-    def register_versioned(self, key: str, agent: IAgent, version: str = "1.0.0") -> None:
+    def register_versioned(
+        self, key: str, agent: IAgent, version: str = "1.0.0"
+    ) -> None:
         """Registers a versioned specialist agent to the platform registry."""
         self.register(key, agent)
         with self._registry_lock:

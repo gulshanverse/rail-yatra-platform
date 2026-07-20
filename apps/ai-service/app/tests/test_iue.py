@@ -55,7 +55,7 @@ class TestIntentUnderstandingEngine(unittest.TestCase):
         # Test station code extraction
         query = "Book travel from NDLS to HWH on 2026-10-15"
         slots = slot_extractor.extract_slots(query)
-        
+
         self.assertIn("origin", slots)
         self.assertEqual(slots["origin"].value, "NDLS")
         self.assertIn("destination", slots)
@@ -79,24 +79,36 @@ class TestIntentUnderstandingEngine(unittest.TestCase):
 
     def test_confidence_evaluator(self):
         # 1. Successful evaluation (high confidence, slots complete)
-        candidate = IntentCandidate(name="plan_travel", confidence=0.95, reason="Matches model classification")
+        candidate = IntentCandidate(
+            name="plan_travel", confidence=0.95, reason="Matches model classification"
+        )
         slots = {
-            "origin": Slot(name="origin", value="NDLS", type="StationCode", confidence=1.0),
-            "destination": Slot(name="destination", value="SBC", type="StationCode", confidence=1.0),
+            "origin": Slot(
+                name="origin", value="NDLS", type="StationCode", confidence=1.0
+            ),
+            "destination": Slot(
+                name="destination", value="SBC", type="StationCode", confidence=1.0
+            ),
         }
         descriptor = confidence_evaluator.evaluate(candidate, slots, {}, {})
         self.assertFalse(descriptor.needs_clarification)
-        
+
         # 2. Low confidence intent triggers clarification
-        candidate_low = IntentCandidate(name="plan_travel", confidence=0.55, reason="Unsure classification")
+        candidate_low = IntentCandidate(
+            name="plan_travel", confidence=0.55, reason="Unsure classification"
+        )
         descriptor_low = confidence_evaluator.evaluate(candidate_low, slots, {}, {})
         self.assertTrue(descriptor_low.needs_clarification)
 
         # 3. Missing slots triggers clarification
         slots_missing = {
-            "origin": Slot(name="origin", value="NDLS", type="StationCode", confidence=1.0)
+            "origin": Slot(
+                name="origin", value="NDLS", type="StationCode", confidence=1.0
+            )
         }
-        descriptor_missing = confidence_evaluator.evaluate(candidate, slots_missing, {}, {})
+        descriptor_missing = confidence_evaluator.evaluate(
+            candidate, slots_missing, {}, {}
+        )
         self.assertTrue(descriptor_missing.needs_clarification)
 
     def test_classifier_pipeline_end_to_end(self):
@@ -104,7 +116,7 @@ class TestIntentUnderstandingEngine(unittest.TestCase):
             # Test fast-path heuristic routing bypasses LLM
             query = "My PNR status is 4321098765"
             descriptor = await intent_classifier.classify_and_parse(query)
-            
+
             self.assertEqual(descriptor.intent.name, "check_pnr")
             self.assertEqual(descriptor.metadata["classifier_type"], "heuristic")
             self.assertIn("pnr", descriptor.slots)
@@ -113,7 +125,9 @@ class TestIntentUnderstandingEngine(unittest.TestCase):
 
             # Test general query falling back
             query_general = "hello there"
-            descriptor_general = await intent_classifier.classify_and_parse(query_general)
+            descriptor_general = await intent_classifier.classify_and_parse(
+                query_general
+            )
             self.assertEqual(descriptor_general.intent.name, "conversation")
 
         self.loop.run_until_complete(run_test())

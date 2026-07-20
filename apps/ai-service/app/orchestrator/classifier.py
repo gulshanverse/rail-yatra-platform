@@ -40,27 +40,35 @@ class IntentClassifier:
         msg = text.lower()
         intent = None
         reason = "Heuristic regex match"
-        
+
         # Check PNR check patterns
         if any(k in msg for k in ["pnr", "ticket status", "booking status"]):
             intent = "check_pnr"
         # Check plan travel patterns
-        elif any(k in msg for k in ["train", "route", "schedule", "go to", "travel to", "from", "to"]):
+        elif any(
+            k in msg
+            for k in ["train", "route", "schedule", "go to", "travel to", "from", "to"]
+        ):
             intent = "plan_travel"
         # Check journey intelligence patterns
-        elif any(k in msg for k in ["waitlist", "delay", "confirm", "forecast", "prediction"]):
+        elif any(
+            k in msg for k in ["waitlist", "delay", "confirm", "forecast", "prediction"]
+        ):
             intent = "journey_intelligence"
         # Check knowledge patterns
         elif any(k in msg for k in ["policy", "luggage", "refund", "faq", "rules"]):
             intent = "knowledge"
         # Check recommendation patterns
-        elif any(k in msg for k in ["recommend", "better", "compare", "score", "comfort", "rate"]):
+        elif any(
+            k in msg
+            for k in ["recommend", "better", "compare", "score", "comfort", "rate"]
+        ):
             intent = "recommendation"
-            
+
         if intent:
             logger.info(f"Heuristic classifier matched: {intent}")
             return IntentCandidate(name=intent, confidence=1.0, reason=reason)
-            
+
         return None
 
     async def _classify_model(self, text: str) -> IntentCandidate:
@@ -72,7 +80,7 @@ class IntentClassifier:
             SystemMessage(content=INTENT_CLASSIFIER_PROMPT),
             HumanMessage(content=text),
         ]
-        
+
         try:
             response = await self.llm.ainvoke(messages)
             content = str(response.content).strip()
@@ -87,11 +95,15 @@ class IntentClassifier:
             confidence = float(data.get("confidence", 0.5))
             reason = data.get("reason", "Parsed classification output.")
 
-            logger.info(f"Model classifier returned: {intent} (confidence: {confidence})")
+            logger.info(
+                f"Model classifier returned: {intent} (confidence: {confidence})"
+            )
             return IntentCandidate(name=intent, confidence=confidence, reason=reason)
-            
+
         except Exception as e:
-            logger.error(f"LLM classification failed: {e}. Falling back to default heuristics.")
+            logger.error(
+                f"LLM classification failed: {e}. Falling back to default heuristics."
+            )
             fallback = self._classify_heuristics(text)
             if fallback:
                 return fallback
@@ -101,27 +113,29 @@ class IntentClassifier:
                 reason="Fallback due to LLM exception.",
             )
 
-    async def classify_and_parse(self, user_message: str, trace_id: str = "default-trace") -> IntentDescriptor:
+    async def classify_and_parse(
+        self, user_message: str, trace_id: str = "default-trace"
+    ) -> IntentDescriptor:
         """
         Executes the full semantic parsing pipeline:
         Normalization -> Heuristics/Model Classification -> Slot Extraction -> Evaluation.
         """
         start_time = time.time()
-        
+
         # 1. Normalize
         normalized = input_normalizer.normalize(user_message)
-        
+
         # 2. Mask PII for the model prompt
         masked = input_normalizer.redact_pii(normalized)
-        
+
         # 3. Extract Slots (from original normalized text to preserve codes/PNRs before masking)
         slots = slot_extractor.extract_slots(masked, original_text=normalized)
-        
+
         # 4. Classify (Heuristics with fallback to Model)
         candidate = self._classify_heuristics(masked)
         if not candidate:
             candidate = await self._classify_model(masked)
-            
+
         # 5. Evaluate and build descriptor
         latency = (time.time() - start_time) * 1000
         context = {
@@ -132,9 +146,11 @@ class IntentClassifier:
         metadata = {
             "execution_time_ms": latency,
             "classifier_type": "heuristic" if candidate.confidence == 1.0 else "model",
-            "model_version": "gemini-3.5-flash" if candidate.confidence != 1.0 else "local-regex",
+            "model_version": "gemini-3.5-flash"
+            if candidate.confidence != 1.0
+            else "local-regex",
         }
-        
+
         descriptor = confidence_evaluator.evaluate(candidate, slots, context, metadata)
         return descriptor
 

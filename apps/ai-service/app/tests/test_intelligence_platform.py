@@ -47,8 +47,11 @@ def test_validator():
     assert validator.validate_coach_label("S1") is True
     assert validator.validate_platform_number("PF-1A") is True
 
-    # Date
-    assert validator.validate_date("2026-07-20") is True
+    # Date — use a dynamically computed future date so the test is time-resilient
+    from datetime import datetime, timedelta
+
+    future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    assert validator.validate_date(future_date) is True
     assert validator.validate_date("invalid-date") is False
 
 

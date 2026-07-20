@@ -104,7 +104,9 @@ class JourneyIntelligenceAgent(BaseAgent):
                 preferences=UserPreferences(),
             )
 
-    async def run(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
+    async def run(
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
+    ) -> str:
         # 1. Parse text message
         requirement = await self._parse_query(user_message)
 

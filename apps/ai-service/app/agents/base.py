@@ -32,7 +32,9 @@ class BaseAgent:
             HumanMessage(content=user_message),
         ]
 
-    async def run(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
+    async def run(
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Runs the agent synchronously and returns the complete text response."""
         logger.info(f"Running agent '{self.name}'")
         messages = self._prepare_messages(user_message, context)

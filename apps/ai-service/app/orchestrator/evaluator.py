@@ -16,7 +16,7 @@ class ConfidenceEvaluator:
         # Fetch configuration thresholds or fall back to standard defaults
         self.intent_threshold = platform_config.get("intent_confidence_threshold", 0.70)
         self.slot_threshold = platform_config.get("slot_confidence_threshold", 0.65)
-        
+
         # Required slots by intent family
         self.required_slots = {
             "plan_travel": ["origin", "destination"],
@@ -50,7 +50,9 @@ class ConfidenceEvaluator:
         if intent_name in self.required_slots:
             for req_slot in self.required_slots[intent_name]:
                 if req_slot not in slots:
-                    logger.warning(f"Required slot '{req_slot}' missing for intent '{intent_name}'.")
+                    logger.warning(
+                        f"Required slot '{req_slot}' missing for intent '{intent_name}'."
+                    )
                     needs_clarification = True
                     errors.append(f"Missing required slot: {req_slot}")
 

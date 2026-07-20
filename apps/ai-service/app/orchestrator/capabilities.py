@@ -13,18 +13,40 @@ class CapabilityMetadata(BaseModel):
 
     identity: str = Field(description="Unique capability identifier.")
     display_name: str = Field(description="Human-readable name.")
-    description: str = Field(description="Detailed capability responsibilities description.")
-    category: str = Field(default="general", description="Capability category classification.")
-    supported_intents: List[str] = Field(default_factory=list, description="Intent families mapped.")
-    priority: int = Field(default=100, description="Routing execution priority hierarchy.")
-    confidence_threshold: float = Field(default=0.5, description="Minimum confidence threshold.")
-    cost_classification: str = Field(default="low", description="Resource or token cost tier.")
-    permissions: List[str] = Field(default_factory=list, description="Authorization permissions required.")
-    availability: bool = Field(default=True, description="Active runtime availability status.")
-    lifecycle_status: str = Field(default="active", description="Status (e.g. active, deprecated, beta).")
+    description: str = Field(
+        description="Detailed capability responsibilities description."
+    )
+    category: str = Field(
+        default="general", description="Capability category classification."
+    )
+    supported_intents: List[str] = Field(
+        default_factory=list, description="Intent families mapped."
+    )
+    priority: int = Field(
+        default=100, description="Routing execution priority hierarchy."
+    )
+    confidence_threshold: float = Field(
+        default=0.5, description="Minimum confidence threshold."
+    )
+    cost_classification: str = Field(
+        default="low", description="Resource or token cost tier."
+    )
+    permissions: List[str] = Field(
+        default_factory=list, description="Authorization permissions required."
+    )
+    availability: bool = Field(
+        default=True, description="Active runtime availability status."
+    )
+    lifecycle_status: str = Field(
+        default="active", description="Status (e.g. active, deprecated, beta)."
+    )
     version: str = Field(default="1.0.0", description="Semantic capability version.")
-    compatibility: List[str] = Field(default_factory=list, description="Compatible state versions.")
-    observability_metadata: Dict[str, Any] = Field(default_factory=dict, description="Custom tracing tags.")
+    compatibility: List[str] = Field(
+        default_factory=list, description="Compatible state versions."
+    )
+    observability_metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Custom tracing tags."
+    )
 
 
 class AICapabilityRegistry:
@@ -38,7 +60,9 @@ class AICapabilityRegistry:
     def register_capability(self, capability: CapabilityMetadata) -> None:
         """Registers capability metadata."""
         self._capabilities[capability.identity] = capability
-        logger.info(f"Registered capability metadata: {capability.identity} (v{capability.version})")
+        logger.info(
+            f"Registered capability metadata: {capability.identity} (v{capability.version})"
+        )
 
     def get_capability(self, identity: str) -> Optional[CapabilityMetadata]:
         """Retrieves metadata by capability identifier."""

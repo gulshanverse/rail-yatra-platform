@@ -34,7 +34,9 @@ class EventBus:
     """
 
     def __init__(self) -> None:
-        self._subscribers: Dict[str, List[Callable[[AIEvent], Coroutine[Any, Any, None]]]] = {}
+        self._subscribers: Dict[
+            str, List[Callable[[AIEvent], Coroutine[Any, Any, None]]]
+        ] = {}
 
     def subscribe(
         self, event_type: str, callback: Callable[[AIEvent], Coroutine[Any, Any, None]]

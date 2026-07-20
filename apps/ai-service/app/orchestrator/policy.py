@@ -27,10 +27,14 @@ class LengthLimitPolicy(IWorkflowPolicy):
     name: str = "LengthLimitPolicy"
 
     def evaluate(self, state: AIState) -> bool:
-        limit = platform_config.get("resource_limits", {}).get("max_message_length", 4096)
+        limit = platform_config.get("resource_limits", {}).get(
+            "max_message_length", 4096
+        )
         msg_len = len(state.get("message", ""))
         if msg_len > limit:
-            logger.warning(f"LengthLimitPolicy mismatch: prompt length {msg_len} exceeds limit {limit}")
+            logger.warning(
+                f"LengthLimitPolicy mismatch: prompt length {msg_len} exceeds limit {limit}"
+            )
             return False
         return True
 
@@ -44,9 +48,13 @@ class ProviderEligibilityPolicy(IWorkflowPolicy):
 
     def evaluate(self, state: AIState) -> bool:
         allowed = platform_config.get("governance", {}).get("allowed_providers", [])
-        requested_provider = state.get("context", {}).get("requested_provider", "synthetic")
+        requested_provider = state.get("context", {}).get(
+            "requested_provider", "synthetic"
+        )
         if requested_provider not in allowed:
-            logger.warning(f"ProviderEligibilityPolicy mismatch: provider '{requested_provider}' not in {allowed}")
+            logger.warning(
+                f"ProviderEligibilityPolicy mismatch: provider '{requested_provider}' not in {allowed}"
+            )
             return False
         return True
 
@@ -78,7 +86,9 @@ class WorkflowPolicyEngine:
                 if not policy.evaluate(state):
                     failures.append(policy.name)
             except Exception as e:
-                logger.error(f"Error evaluating policy '{policy.name}': {e}", exc_info=True)
+                logger.error(
+                    f"Error evaluating policy '{policy.name}': {e}", exc_info=True
+                )
                 failures.append(f"{policy.name}_Error: {str(e)}")
         return failures
 
@@ -98,7 +108,9 @@ class AIGovernanceLayer:
         """
         failures = self._policy_engine.evaluate_all(state)
         if failures:
-            state["errors"].extend([f"Governance check failed for policy: {f}" for f in failures])
+            state["errors"].extend(
+                [f"Governance check failed for policy: {f}" for f in failures]
+            )
             return False
         return True
 

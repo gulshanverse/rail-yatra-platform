@@ -52,7 +52,9 @@ class AIObservabilityFramework:
     def record_decision(self, trace: DecisionTrace) -> None:
         """Saves decision trace and publishes the telemetry event."""
         self._traces[trace.trace_id] = trace
-        logger.info(f"Recorded decision trace: {trace.trace_id} (routing={trace.routing_decision})")
+        logger.info(
+            f"Recorded decision trace: {trace.trace_id} (routing={trace.routing_decision})"
+        )
 
         # Publish tracing event to Event Bus
         event = AIEvent(

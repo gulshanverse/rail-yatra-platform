@@ -13,7 +13,9 @@ class IAgent(Protocol):
     name: str
     system_prompt: str
 
-    async def run(self, user_message: str, context: Optional[Dict[str, Any]] = None) -> str:
+    async def run(
+        self, user_message: str, context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Runs the agent synchronously and returns the complete text response."""
         ...
 

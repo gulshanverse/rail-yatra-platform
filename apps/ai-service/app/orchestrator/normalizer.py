@@ -14,7 +14,9 @@ class InputNormalizer:
         # Compiled patterns for PII redaction
         # Support optional parentheses around country code, e.g. (+91) or +91 or 91
         self.phone_pattern = re.compile(r"\b(?:\(?\+?91\)?[\-\s]?)?[6-9]\d{9}\b")
-        self.email_pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b")
+        self.email_pattern = re.compile(
+            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b"
+        )
         self.pnr_pattern = re.compile(r"\b\d{10}\b")
         self.cc_pattern = re.compile(r"\b(?:\d[ -]*?){13,16}\b")
 
@@ -32,7 +34,7 @@ class InputNormalizer:
         """Redacts sensitive traveler information."""
         if not text:
             return ""
-        
+
         redacted = text
         # 1. Redact credit cards
         redacted = self.cc_pattern.sub("[REDACTED_CC]", redacted)
@@ -42,10 +44,10 @@ class InputNormalizer:
         redacted = self.pnr_pattern.sub("[REDACTED_PNR]", redacted)
         # 4. Redact emails
         redacted = self.email_pattern.sub("[REDACTED_EMAIL]", redacted)
-        
+
         if redacted != text:
             logger.info("PII detected and redacted from user input.")
-            
+
         return redacted
 
 
