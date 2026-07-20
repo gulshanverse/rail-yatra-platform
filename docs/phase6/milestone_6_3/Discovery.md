@@ -7,35 +7,36 @@
 
 | Metadata Field | Value |
 | :--- | :--- |
-| **Document Reference** | RY-P6-M6.3-DISC-3.0 |
-| **Version** | 3.0.0 |
+| **Document Reference** | RY-P6-M6.3-DISC-3.1 |
+| **Version** | 3.1.0 |
 | **Status** | APPROVED FOR PLANNING |
 | **Document Owner** | Principal Enterprise Architect |
 | **Architecture Review Authority** | Enterprise Architecture Review Board (ARB) |
 | **Authors** | Chief Technology Officer, Chief Product Officer, Principal AI Architect |
 | **Approvers** | Enterprise Governance Committee, Technical Design Authority, Product Sponsor |
 | **Classification** | Internal Enterprise Confidential |
-| **Governing References** | `Phase6_Engineering_Constitution.md`, `Enterprise Discovery Standard v3.0` |
+| **Governing References** | `Phase6_Engineering_Constitution.md`, `Enterprise Discovery Standard v3.1` |
 | **Related Documents** | `Phase6_Roadmap.md`, `Milestone_Template.md`, `M6.2/Discovery.md`, `M6.2/Planning.md` |
 
 ### Revision History
 | Date | Version | Description | Authors |
 | :--- | :---: | :--- | :--- |
 | 2026-07-19 | 1.0.0 | Initial baseline draft for planning concepts. | Architecture Team |
-| 2026-07-20 | 2.0.0 | Comprehensive expansion into formal Enterprise Discovery. | ARB Board |
+| 2026-07-20 | 2.0.0 | Complete expansion into formal Enterprise Discovery. | ARB Board |
 | 2026-07-20 | 3.0.0 | Compliance alignment with Enterprise Discovery Standard v3.0. | Governance Committee |
+| 2026-07-20 | 3.1.0 | Final ARB refinement for Enterprise Discovery Standard v3.1. | ARB Board |
 
 ### Purpose
-This document establishes the business case, strategic drivers, domain boundary, operational workflows, and risk parameters for the **Planning & Decision Engine** (Milestone 6.3). It answers the questions of *why* this capability is necessary, *what* business and customer problems it addresses, and *who* is affected, serving as the official business input for the subsequent Planning phase.
+This document establishes the business case, strategic drivers, business concepts, operational workflows, and risk parameters for the **Planning & Decision Engine** (Milestone 6.3). It answers the questions of *why* this business function is necessary, *what* business and customer problems it addresses, and *who* is affected, serving as the official business input for the subsequent Planning phase.
 
 ---
 
 ## 2. Executive Summary
 
 ### Business Motivation
-In the highly competitive digital travel sector, customer retention is driven by convenience. Travel requests are naturally complex and compound—travelers do not think in terms of isolated actions like "check status" or "search routes" in separate turns. Instead, they seek a single concierge that can handle multi-step tasks (e.g., verifying a waitlist PNR and, if confirmation probability is low, finding and booking an alternative seat). 
+In the highly competitive digital travel sector, customer retention is driven by convenience. Travel requests are naturally complex and compound—travelers do not think in terms of isolated actions like "check status" or "search routes" in separate turns. Instead, they seek a single concierge that can handle multi-step tasks (e.g., verifying a waitlist booking and, if confirmation probability is low, finding and reserving an alternative seat). 
 
-The platform currently lacks a unified planning layer to coordinate these steps. Without it, the user must go through disjointed conversational turns, resulting in high cognitive friction and high support ticket volume. The Planning & Decision Engine is required to dynamically formulate, validate, and sequence steps to fulfill composite traveler goals in a single interaction.
+The platform currently lacks a unified planning capability to coordinate these steps. Without it, the user must go through disjointed conversational turns, resulting in high cognitive friction and high support ticket volume. The Planning & Decision Engine is required to dynamically formulate, validate, and sequence steps to fulfill composite traveler goals in a single interaction.
 
 ### Customer Motivation
 Travelers demand a seamless conversational experience that mimics an expert human agent. When they present a complex, conditional requirement, they expect the assistant to outline a logical, transparent course of action, proactively verify all travel rules (e.g., layovers, class quotas, senior concessions), and confirm execution steps rather than returning system errors or expecting separate manual inputs.
@@ -44,17 +45,17 @@ Travelers demand a seamless conversational experience that mimics an expert huma
 Manual processing of incorrect bookings, late-stage transactional cancellations, and customer service requests regarding plan failures represent a significant overhead. Intercepting invalid execution flows early through a centralized planning process minimizes support escalations, improves downstream service stability, and reduces the time support teams spend untangling half-completed user bookings.
 
 ### Platform Motivation
-Blindly executing downstream operations without an intermediate validation step is highly inefficient. It exposes the platform to redundant transactional API costs, rate limits, and database state conflicts. A dedicated, stateless planning layer acts as a cognitive buffer where a sequence of actions is constructed and validated against business constraints prior to initiating any transactional executions.
+Blindly executing downstream operations without an intermediate validation step is highly inefficient. It exposes the platform to redundant transactional fees, rate limits, and conflicting booking requests. A dedicated, planning capability acts as a business buffer where a sequence of actions is constructed and validated against business constraints prior to initiating any transactional executions.
 
 ### Strategic Motivation
 This milestone transitions the platform from a reactive query responder into a proactive conversational travel assistant. This shift is critical to protect RailYatra’s market position and prepare the enterprise for upcoming AI agent networks.
 
 ### Long-Term Vision
-The Planning & Decision Engine serves as the core reasoning engine of the RailYatra platform. It establishes the foundations for multi-agent negotiation, cross-provider travel routing, and predictive travel booking optimization in future phases.
+The Planning & Decision Engine serves as the core reasoning capability of the RailYatra platform. It establishes the foundations for multi-agent negotiation, cross-provider travel routing, and predictive travel booking optimization in future phases.
 
 ### Expected Business Outcome
 - A 20% increase in composite query completion rates.
-- A 15% reduction in downstream transactional API costs via early plan rejection.
+- A 15% reduction in downstream transactional fees via early plan rejection.
 - A 30% deflection of complex booking inquiries from human support desks.
 
 ---
@@ -78,7 +79,7 @@ The existing system maps inputs directly to single action handlers. It lacks:
 
 ### Financial Impact
 - Lost ticket sales due to drop-offs during multi-leg planning loops.
-- Wasted API billing fees for executions that fail late in the process due to obvious constraint violations.
+- Wasted billing fees for executions that fail late in the process due to obvious constraint violations.
 
 ### Strategic Impact
 Failure to resolve this will prevent the platform from supporting Phase 7 capabilities, such as autonomous predictive waitlist trading, leaving RailYatra behind competitors who are moving toward fully autonomous travel assistants.
@@ -98,24 +99,24 @@ If nothing changes, customer acquisition costs will rise, conversion rates will 
 ## 4. Current State Analysis
 
 ### Current Workflow
-1. The traveler inputs: *"Check PNR 4210987654 and book an alternative on Train 12952 if it is still waitlisted."*
-2. The system sanitizes the text and resolves the primary intent as `check_pnr`.
-3. The orchestrator routes the request directly to the PNR query capability.
+1. The traveler inputs: *"Check my ticket status and book an alternative on Train 12952 if it is still waitlisted."*
+2. The system sanitizes the text and resolves the primary intent as checking the status.
+3. The orchestrator routes the request directly to the status query capability.
 4. The traveler is shown the current waitlist status (e.g., WL 45).
 5. The system stops execution. The second part of the user's request (*"book an alternative..."*) is ignored.
 6. The user must manually input a new query to search for alternatives, review the results, and then issue a third prompt to book.
 
 ### Current Business Process
-Business logic is tied directly to individual tools. There is no central step where the system can inspect a complete travel plan against global policies (such as double-booking prevention) before invoking external systems.
+Business logic is tied directly to individual services. There is no central step where the system can inspect a complete travel plan against global policies (such as double-booking prevention) before invoking external systems.
 
 ### Customer Journey
 The customer journey is fragmented into separate, disjointed search and status turns, resulting in high abandonment rates before the booking is confirmed.
 
 ### Operational Process
-Support agents must trace separate logs for PNR checks, search queries, and booking attempts to reconstruct what a traveler was trying to accomplish, leading to long ticket resolution times.
+Support agents must trace separate logs for status checks, search queries, and booking attempts to reconstruct what a traveler was trying to accomplish, leading to long ticket resolution times.
 
 ### Pain Points & Bottlenecks
-- **No Shared Context**: Downstream tools run in isolation; they cannot access the outputs of sibling tools within the same transaction.
+- **No Shared Context**: Downstream services run in isolation; they cannot access the outputs of sibling services within the same transaction.
 - **Late Failure Detection**: Business rules (e.g., ticket class restrictions) are validated by the final reservation system, rather than checked upfront.
 - **Excessive Conversational Turns**: Users must act as the logical bridge between different capabilities.
 
@@ -125,8 +126,8 @@ Support agents must trace separate logs for PNR checks, search queries, and book
 
 ### Future Business Workflow
 1. The traveler provides a compound prompt.
-2. The intent engine parses the user's goals and extracts the necessary slots.
-3. The **Planning & Decision Engine** analyzes the parsed goals and generates an `ExecutionPlan` containing sequenced, conditional steps.
+2. The intent understanding capability parses the user's goals and extracts the necessary parameters.
+3. The **Planning & Decision Engine** analyzes the parsed goals and generates a **Structured Travel Plan** containing sequenced, conditional steps.
 4. A validation step checks the plan against global business rules (e.g., booking windows, age eligibility, routing feasibility).
 5. The validated plan is sent for execution in a controlled, traceable manner.
 6. The traveler receives a unified response presenting the results of the complete sequence, or a single confirmation gate for the entire plan.
@@ -135,7 +136,7 @@ Support agents must trace separate logs for PNR checks, search queries, and book
 Travelers enjoy a conversational partner that understands complex, conditional logic. They receive complete, structured proposals that respect their preferences and constraints, reducing the booking flow to a single interaction.
 
 ### Future Operational Improvements
-Support teams gain access to structured execution plans that detail exactly what steps were generated, which rules were checked, and where any failures occurred, reducing diagnostic times.
+Support teams gain access to structured plan records that detail exactly what steps were generated, which rules were checked, and where any failures occurred, reducing diagnostic times.
 
 ### Business Outcomes
 - Shorter transaction times for complex bookings.
@@ -150,10 +151,10 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 ## 6. Business Drivers
 
 - **Conversion Rate Optimization (CRO)**: Simplifying compound travel bookings increases transaction volumes.
-- **Cost Reduction**: Early validation of plans blocks invalid requests, protecting the platform from wasted API fees.
+- **Cost Reduction**: Early validation of plans blocks invalid requests, protecting the platform from wasted transaction fees.
 - **Customer Satisfaction (CSAT)**: Resolving composite queries in a single turn increases user trust and retention.
 - **Automation Rate**: Automating complex planning sequences increases the percentage of queries handled without support desk intervention.
-- **Feature Velocity**: New business capabilities (e.g., hotel booking) can be registered as tools, and the planner will automatically include them in customer plans without requiring custom orchestrator routing code.
+- **Feature Velocity**: New business capabilities (e.g., hotel booking) can be registered as services, and the planning capability will automatically include them in customer plans without requiring custom orchestrator routing code.
 - **Competitive Advantage**: Offering a true planning assistant differentiates RailYatra from traditional, form-based travel websites.
 - **Regulatory Compliance**: Ensuring all generated plans undergo a validation gate guarantees that travel regulations are checked before any transaction occurs.
 
@@ -163,7 +164,7 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 
 ### 1. Travelers (End Users)
 - **Role**: Customers booking travel and seeking assistance.
-- **Responsibilities**: Provide intent and travel preferences.
+- **Responsibilities**: Provide travel intent and preferences.
 - **Goals**: Find and book travel options quickly and reliably.
 - **Pain Points**: Navigating separate screens for PNR checks, seat availability, and booking.
 - **Expectations**: The assistant should understand complex requests and handle details automatically.
@@ -171,7 +172,7 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 - **Influence**: High (primary customer).
 - **Business Importance**: Critical.
 
-### 2. Customer Support Teams
+### 2. Support Teams
 - **Role**: Resolve customer issues and booking errors.
 - **Responsibilities**: Diagnose transaction failures and handle refunds or modifications.
 - **Goals**: Reduce support ticket resolution time and minimize escalated cases.
@@ -181,22 +182,22 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 - **Influence**: Medium.
 - **Business Importance**: High.
 
-### 3. Operations & Business Teams
+### 3. Operations
 - **Role**: Manage business rules, partnership margins, and vendor costs.
 - **Responsibilities**: Maintain profitability and ensure compliance with railway policies.
 - **Goals**: Minimize transactional fees and enforce partner booking rules.
-- **Pain Points**: Wasted API charges for transactions that fail downstream due to simple constraint violations.
-- **Needs**: A centralized rule validation gate before transactions are sent to executors.
+- **Pain Points**: Wasted transaction charges for activities that fail downstream due to simple constraint violations.
+- **Needs**: A centralized rule validation gate before transactions are sent to business processes.
 - **Success Criteria**: Zero downstream failures due to pre-existing policy violations.
 - **Influence**: High.
 - **Business Importance**: Critical.
 
-### 4. Security & Compliance Teams
+### 4. Security
 - **Role**: Protect customer data and prevent system abuse.
 - **Responsibilities**: Enforce security rules and verify compliance with data privacy regulations.
 - **Goals**: Prevent unauthorized actions and protect personal data.
 - **Pain Points**: Risk of users manipulating the planning logic to perform actions they aren't authorized to do.
-- **Needs**: Strict validation of plan steps against a secure registry of capabilities.
+- **Needs**: Strict validation of plan steps against secure, approved business functions.
 - **Success Criteria**: Zero unauthorized plan steps generated or executed.
 - **Influence**: High.
 - **Business Importance**: High.
@@ -220,16 +221,16 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 - **Goals**: Travel during specific hours and have alternative options ready if delays occur.
 - **Workflow**: Requests quick status updates and expects immediate alternatives if there are disruptions.
 - **Pain Points**: Having to search for new options when a train is delayed.
-- **Needs**: A proactive planning tool that can check PNR status and find alternatives in a single step.
+- **Needs**: A proactive planning tool that can check ticket status and find alternatives in a single step.
 - **Motivations**: Reliability and punctuality.
 - **Frustrations**: The assistant only giving him delay information without suggesting alternative routes.
 - **Success Definition**: The system detects a delay and immediately suggests an alternative travel plan.
 
-### Persona C: Amit (The Operations Specialist)
+### Persona C: Amit (Operations Team)
 - **Background**: 28, support team member who handles booking disputes.
 - **Goals**: Resolve user complaints about failed transactions quickly.
 - **Workflow**: Reviews system logs to find why a transaction failed and correct the booking state.
-- **Pain Points**: Fragmented logs that don't show the user's original goal or the steps taken by the AI.
+- **Pain Points**: Fragmented logs that don't show the user's original goal or the steps taken by the assistant.
 - **Needs**: A structured record of the execution plan and the validation checks that were run.
 - **Motivations**: Customer satisfaction and diagnostic efficiency.
 - **Frustrations**: Getting customer complaints where the system booked the wrong train class because of a planning error.
@@ -241,9 +242,9 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 
 ### Scenario 1: Conditional Alternative Booking
 - **Current Situation**: A user has a waitlisted train ticket (WL 50) and wants to check its status, but also wants to book a backup ticket if confirmation is unlikely.
-- **Current Behavior**: The system checks the PNR, reports the waitlist number, and stops. It does not look for alternatives.
+- **Current Behavior**: The system checks the ticket status, reports the waitlist number, and stops. It does not look for alternatives.
 - **Business Problem**: The user has to manually search for alternatives, increasing the chance they look at other platforms.
-- **Desired Behavior**: The decision engine builds a plan: 1) Check waitlist status and calculate confirmation probability. 2) If probability is low ($< 70\%$), search for alternative trains on the same route for that day.
+- **Desired Behavior**: The decision capability builds a plan: 1) Check waitlist status and calculate confirmation probability. 2) If probability is low, search for alternative trains on the same route for that day.
 - **Business Value**: Retains the customer on the platform and increases booking revenue.
 - **Customer Value**: Peace of mind with an automated backup option.
 - **Operational Value**: Fewer support requests from anxious travelers asking about waitlist likelihood.
@@ -251,9 +252,9 @@ RailYatra evolves from a search-and-book utility into a personalized travel advi
 ### Scenario 2: Regulatory Window Validation
 - **Current Situation**: A traveler requests to book a ticket for a train departing in 20 minutes.
 - **Current Behavior**: The system starts the booking process and calls the gateway, which fails because the booking window has closed (chart preparation is underway).
-- **Business Problem**: RailYatra pays transactional fees for a failed API call, and the user gets a late error message.
-- **Desired Behavior**: The planning engine checks the departure time constraint *before* calling the booking API. It rejects the plan immediately and proposes booking the next available train.
-- **Business Value**: Saves API costs and prevents unnecessary resource use.
+- **Business Problem**: RailYatra pays transactional fees for a failed service call, and the user gets a late error message.
+- **Desired Behavior**: The planning capability checks the departure time constraint *before* calling the booking service. It rejects the plan immediately and proposes booking the next available train.
+- **Business Value**: Saves transaction costs and prevents unnecessary resource use.
 - **Customer Value**: Faster feedback and immediate alternative suggestions.
 - **Operational Value**: Prevents billing disputes from failed booking attempts.
 
@@ -281,11 +282,11 @@ Customer Experience: "I found seats on Train 12125 and booked your local cab con
 
 ## 11. Business Objectives
 
-- **Maximize Plan Success Rates**: Achieve $> 98\%$ successful execution rates for generated plans by validating business rules upfront.
-- **Reduce Conversational Loops**: Decrease the average number of turns required to resolve multi-step queries from 4 to 1.5.
-- **Deflect Support Tickets**: Reduce support team volume related to complex booking issues by 30%.
-- **Minimize Transaction Waste**: Prevent 100% of downstream API calls for requests that violate known constraints (e.g., booking window expiration).
-- **Increase Booking Conversion**: Improve the booking conversion rate for multi-leg trips by 15% by presenting unified itineraries.
+- **Maximize Plan Success Rates**: Achieve high successful execution rates for generated plans by validating business rules upfront.
+- **Reduce Conversational Loops**: Decrease the average number of turns required to resolve multi-step queries.
+- **Deflect Support Tickets**: Reduce support team volume related to complex booking issues.
+- **Minimize Transaction Waste**: Prevent downstream service calls for requests that violate known constraints (e.g., booking window expiration).
+- **Increase Booking Conversion**: Improve the booking conversion rate for multi-leg trips by presenting unified itineraries.
 
 ---
 
@@ -294,7 +295,7 @@ Customer Experience: "I found seats on Train 12125 and booked your local cab con
 | ID | Requirement Name | Description | Priority | Business Reason | Expected Benefit |
 | :--- | :--- | :--- | :---: | :--- | :--- |
 | **BR-01** | Plan Generation | Translate parsed intent and slot data into a sequenced list of actions. | **Mandatory** | Resolves compound user queries in a single turn. | Higher conversion and better customer satisfaction. |
-| **BR-02** | Constraint Check | Validate plan steps against business rules (e.g., age limits, booking windows) before execution. | **Mandatory** | Prevents executing transactions that violate policies. | Zero wasted API costs from policy violations. |
+| **BR-02** | Constraint Check | Validate plan steps against business rules (e.g., age limits, booking windows) before execution. | **Mandatory** | Prevents executing transactions that violate policies. | Zero wasted service costs from policy violations. |
 | **BR-03** | Parallel Execution | Identify steps that do not depend on each other and flag them for parallel execution. | **Should Have** | Speeds up overall system response times. | Shorter waiting times for the traveler. |
 | **BR-04** | Fallback Step Planning | Include explicit alternative paths in the plan if a primary step fails (e.g., check bus if train is full). | **Should Have** | Handles common travel setbacks gracefully. | Higher resolution rates and fewer manual retries. |
 | **BR-05** | Clarification Triggers | Halt plan generation and request user input if critical information is missing. | **Mandatory** | Prevents booking errors from missing details. | Higher accuracy and safer transactions. |
@@ -345,22 +346,22 @@ The platform must identify when crucial slots are missing (e.g., origin station)
 ## 15. Non-Functional Discovery
 
 ### Reliability Expectations
-The planning logic must evaluate plans consistently. It must be stateless, ensuring that parallel planning requests do not interfere with each other or leak context.
+The planning capability must evaluate plans consistently. It must ensure that concurrent planning requests do not interfere with each other or leak customer context, preserving operational stability and consistent results.
 
 ### Availability Expectations
-The planning engine must be highly available to ensure that travelers can plan journeys at any time, even during peak booking hours.
+The planning capability must be available continuously to ensure that travelers can plan journeys at any time, even during peak booking hours, supporting business continuity.
 
 ### Business Performance Expectations
-Plan generation and constraint validation must execute in under **100ms** to keep the overall conversational latency low and prevent user abandonment.
+Plan generation and constraint validation must be highly responsive to keep the overall conversational experience seamless and prevent user abandonment.
 
 ### Maintainability Expectations
-Business rules (like booking windows or age limits) must be decoupled from the core planning logic so they can be updated easily as railway policies change.
+Business rules (like booking windows or age limits) must be decoupled from the core planning logic so they can be maintained and updated easily as railway policies change.
 
 ### Business Security Expectations
-The plan structure must be protected against plan injection, ensuring that only registered capabilities can be sequenced.
+The plan structure must be trustworthy and secure, preventing unauthorized or unsafe operations from being scheduled in the plan sequence.
 
 ### Compliance Expectations
-Plan options must be unbiased, highlighting the best routes and pricing options for the traveler.
+Plan options must align with responsible AI guidelines, providing transparent and unbiased choices that prioritize customer preferences.
 
 ---
 
@@ -378,18 +379,18 @@ Plan options must be unbiased, highlighting the best routes and pricing options 
 
 ### Immediate Value
 - Customers can resolve multi-leg and conditional queries in a single turn.
-- Immediate reduction in transactional API costs by filtering out invalid requests before execution.
+- Immediate reduction in transactional costs by filtering out invalid requests before execution.
 
 ### Medium-Term Value
 - Better customer retention as users prefer the easy conversational planning tool over competitors.
-- Ability to cross-sell and bundle transit, meals, and accommodations in a single plan.
+- Ability to bundle transit, meals, and accommodations in a single plan.
 
 ### Long-Term Value
-- Prepares the business to deploy fully autonomous travel assistants.
+- Positions RailYatra as a pioneer in travel orchestration, driving brand loyalty and market share.
 - Lowers operational support costs through high self-service automation rates.
 
 ### Competitive Advantage
-RailYatra becomes the first AI assistant that actively reasons and plans for travelers, rather than just acting as a conversational wrapper for search queries.
+RailYatra becomes the first travel assistant that actively reasons and plans for travelers, rather than just acting as a conversational wrapper for search queries.
 
 ---
 
@@ -405,17 +406,17 @@ RailYatra becomes the first AI assistant that actively reasons and plans for tra
 
 | Risk ID | Description | Likelihood | Impact | Mitigation Strategy | Residual Risk | Owner |
 | :---: | :--- | :---: | :---: | :--- | :---: | :--- |
-| **R-01** | **Plan Injection**: Users input prompts designed to trigger unauthorized system steps. | Low | High | Restrict step types to an immutable, pre-approved registry of capabilities. | Very Low | Security Lead |
-| **R-02** | **Planning Loop**: The engine gets stuck in a recursive loop generating fallback steps. | Medium | Medium | Set a hard limit on the number of steps in a plan (e.g., maximum 5 steps). | Low | Engineering Lead |
+| **R-01** | **Plan Manipulation**: Users input prompts designed to trigger unauthorized business steps. | Low | High | Restrict step types to secure, pre-approved business functions. | Very Low | Security Lead |
+| **R-02** | **Planning Loop**: The capability gets stuck in a loop generating fallback steps. | Medium | Medium | Set a hard limit on the number of steps in a plan. | Low | Engineering Lead |
 | **R-03** | **Stale Rules**: Validation rules lag behind updates to railway policies. | Medium | High | Decouple validation policies and check them regularly against official sources. | Low | Operations Lead |
-| **R-04** | **Ambiguity Failure**: The engine creates an incorrect plan because intent details are unclear. | Medium | Medium | If intent confidence is low, default to a clarification plan rather than executing steps. | Low | Product Lead |
+| **R-04** | **Ambiguity Failure**: The capability creates an incorrect plan because details are unclear. | Medium | Medium | If confidence is low, default to a clarification plan rather than executing steps. | Low | Product Lead |
 
 ---
 
 ## 20. Assumption Register
 
 - **A-01 (Business)**: Travelers prefer a structured, transparent plan that they can review before booking, rather than having the system make decisions silently.
-- **A-02 (Operational)**: Downstream executors can run sequenced plans and return status updates for individual steps.
+- **A-02 (Operational)**: Downstream business processes can run sequenced plans and return status updates for individual steps.
 - **A-03 (Strategic)**: The Indian railway booking rules (e.g., quotas, timing limits) are stable enough to be represented as validation constraints.
 
 ---
@@ -425,69 +426,73 @@ RailYatra becomes the first AI assistant that actively reasons and plans for tra
 | ID | Assumption to Validate | Validation Method | Timeline | Impact of Failure |
 | :---: | :--- | :--- | :--- | :--- |
 | **A-01** | Users prefer reviewing plans. | Conduct user testing and monitor confirmation rates of generated plans. | Within 30 days of staging release. | Low. If users prefer silent execution, we can automate the confirmation step. |
-| **A-02** | Downstream executors can run sequenced plans. | Run integration scenarios testing the executor against complex plans. | During Planning phase of M6.4. | High. If executors cannot handle sequences, the planner must split steps. |
+| **A-02** | Downstream processes can run sequenced plans. | Run integration scenarios testing the processes against complex plans. | During Planning phase of M6.4. | High. If processes cannot handle sequences, the planner must split steps. |
 | **A-03** | Railway rules are stable. | Regularly review IRCTC policy updates and check rules against the validation log. | Monthly operational review. | Medium. Validation logic will need frequent updates. |
 
 ---
 
 ## 22. Business Constraints
 
-- **Statelessness**: The Decision Engine must not read or write directly to databases, remaining fully stateless.
-- **Performance Budget**: Plan generation and validation must execute in under **100ms** to maintain a fast conversational experience.
+- **Logical Isolation**: The Decision Engine must focus strictly on generating plans, keeping its logic separate from execution and storage.
+- **Responsiveness**: Plan generation and validation must execute quickly to maintain a fast conversational experience.
 - **Regulatory Boundaries**: The system must operate within the legal frameworks of IRCTC and passenger transport rules.
-- **Privacy Rules**: The generated plan structure must not contain unencrypted PII in its metadata logs.
+- **Privacy Rules**: The generated plan structure must not contain unencrypted PII in its audit logs.
 
 ---
 
 ## 23. Security & Trust Considerations
 
-- **Plan Security**: The executor must reject any plan that includes steps not registered in the system's capability catalog.
-- **User Permission Validation**: The engine must verify that the traveler is authorized to access the travel profiles and resources listed in the plan.
-- **Transparent Reasoning**: Plans should explain why certain steps are suggested (e.g., showing that a train option was rejected because of a tight layover) to build trust.
+- **Customer Trust**: Plans must be transparent and clearly show why specific choices are proposed.
+- **Privacy**: Personal customer information must be protected and kept out of plan records.
+- **Responsible AI**: Planning decisions must be fair, accurate, and unbiased, prioritizing passenger preferences.
+- **Misuse Prevention**: The system must protect the planning logic from manipulation that could lead to unauthorized actions.
+- **Fraud Prevention**: The system must verify traveler identity and permissions before planning bookings.
+- **Transparency**: Clear explanation of constraints and reasons behind plan rejections or alerts.
 
 ---
 
 ## 24. Compliance Considerations
 
-- **Responsible AI Guidelines**: The engine must remain neutral and must not favor specific partners or transport classes unless requested by the user.
-- **DPDP Act Compliance**: Plan logs must be clean of passenger PII, storing only abstract reference IDs.
+- **Responsible AI Principles**: The planning capability must remain neutral and must not favor specific partners or transport classes unless requested by the user.
+- **DPDP Act Compliance**: Passenger personal data must be protected and handled according to privacy guidelines.
 - **Ticketing Policies**: All validation rules must align with official railway passenger carriage regulations.
+- **Enterprise Governance**: Decisions and rule updates must be documented and reviewed by the governance committee.
 
 ---
 
 ## 25. Business Glossary
 
-- **Execution Plan**: A structured, validated sequence of actions designed to resolve a traveler's compound goal.
+- **Structured Travel Plan**: A structured, validated sequence of actions designed to resolve a traveler's compound goal.
 - **Plan Step**: An individual action within a plan (e.g., check seat availability, draft booking details).
 - **Constraint**: A business rule or limitation that affects plan validity (e.g., layover minimums, booking windows).
 - **Traveller Goal**: The high-level objective expressed by the user in natural language.
-- **Decision Engine**: The logic that sequences and validates steps based on intent.
-- **Capability**: A registered service that the platform can execute.
+- **Decision Engine**: The capability that sequences and validates steps based on intent.
+- **Business Function**: A registered service that the platform can execute.
 
 ---
 
 ## 26. Success Metrics
 
-- **Planning Accuracy**: Percentage of plans that match user goals without requiring changes ($> 95\%$).
-- **Pre-execution Failure Rate**: Percentage of invalid plans caught and corrected before execution ($100\%$).
-- **Average Conversation Length**: Reduction in the number of turns required to complete a booking ($< 2$ turns on average).
-- **Downstream Success Rate**: Percentage of executed plans that complete without errors ($> 98\%$).
-- **Wasted API Cost Reduction**: Percentage reduction in API fees by blocking invalid requests at the planning gate ($\ge 15\%$).
+- **Planning Accuracy**: Percentage of plans that match user goals without requiring changes.
+- **Pre-execution Failure Rate**: Percentage of invalid plans caught and corrected before execution.
+- **Average Conversation Length**: Reduction in the number of turns required to complete a booking.
+- **Downstream Success Rate**: Percentage of executed plans that complete without errors.
+- **Wasted Transaction Cost Reduction**: Percentage reduction in fees by blocking invalid requests at the planning gate.
 
 ---
 
 ## 27. Success Measurement Timeline
 
-- **30 Days Post-Release**: Verify that the planning latency remains under 100ms and that accuracy is $> 90\%$.
-- **90 Days Post-Release**: Assess the reduction in support tickets related to booking errors and check API cost changes.
+- **30 Days Post-Release**: Verify that the planning capability is responsive and that customer plan accuracy meets targets.
+- **90 Days Post-Release**: Assess the reduction in support tickets related to booking errors and check transaction cost changes.
 - **180 Days Post-Release**: Analyze customer retention rates and tracking changes in composite bookings.
-- **1 Year Post-Release**: Assess how well the planning engine integrates with new transit and hotel partners.
+- **1 Year Post-Release**: Assess how well the planning capability integrates with new transit and hotel partners.
 
 ---
 
 ## 28. Future Roadmap Alignment
 
-- **Milestone 6.4 (Tool Executor)**: The executor relies on the structured `ExecutionPlan` generated in this milestone to run steps in order.
+- **Milestone 6.4 (Tool Executor)**: The executor relies on the structured plan generated in this milestone to run steps in order.
 - **Milestone 6.5 (Memory Platform)**: Memory systems will store the active plan to manage state across multi-turn changes.
 - **Milestone 6.6 (Response Composer)**: The composer uses plan execution traces to explain to the user *why* specific options were chosen.
 - **Phase 7 (Prediction & Trading)**: Prepares the platform for predictive agents that can optimize plans based on price trends.
@@ -504,9 +509,9 @@ RailYatra becomes the first AI assistant that actively reasons and plans for tra
 
 ## 30. Discovery Recommendations
 
-1. **Implement a Stateless Planner**: Keep the planning engine decoupled from execution code to ensure high performance and easy testing.
-2. **Standardize the Plan Schema**: Define a consistent structure for the `ExecutionPlan` to ensure that all downstream executors and memory stores consume the same format.
-3. **Build a Policy Validator**: Implement a validator that runs immediately after plan generation to reject unsafe sequences before execution.
+1. **Adopt a Decoupled Planning Workflow**: Establish a clear separation between plan formulation and plan execution to make the system easier to manage and update.
+2. **Standardize the Plan Structure**: Ensure the travel plan follows a consistent format so that it can be processed reliably by all downstream services.
+3. **Establish a Policy Validation Gate**: Check all plans against business rules before starting execution to catch errors early.
 
 ---
 
@@ -521,9 +526,10 @@ RailYatra becomes the first AI assistant that actively reasons and plans for tra
 
 The following decisions are deferred to the Planning Phase:
 - The programming models, classes, and types that represent the Plan and Step models.
-- The concrete validation interfaces.
+- The concrete validation interfaces and architecture.
 - The telemetry event payload structure.
 - The file configuration format for travel rules and thresholds.
+- All technology selections, database choices, testing frameworks, and deployment strategies.
 
 ---
 
@@ -581,7 +587,7 @@ This document has been audited and contains:
 - **Business Perspective**: The business case for reducing conversational friction and conversion drop-offs is sound.
 - **Product Perspective**: User personas and scenarios accurately reflect traveler needs.
 - **Operations Perspective**: Operational metrics focus on deflecting support cases and reducing manual interventions.
-- **Security Perspective**: Plan injection risk is mitigated by an immutable capability registry constraint.
+- **Security Perspective**: Plan injection risk is mitigated by secure, approved business functions.
 - **Compliance Perspective**: Rules align with IRCTC ticketing window regulations and data privacy rules.
 - **Engineering Perspective**: The requirements are clear enough to begin drafting technical designs during the Planning Phase.
 
