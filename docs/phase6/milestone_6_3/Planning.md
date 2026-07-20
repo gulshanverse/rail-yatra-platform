@@ -10,19 +10,20 @@
 | **Document Reference** | RY-P6-M6.3-PLN-3.1 |
 | **Version** | 3.1.0 |
 | **Status** | APPROVED FOR ARCHITECTURE FREEZE |
-| **Document Owner** | Principal AI Architect |
+| **Architecture Owner** | Principal Enterprise Architect |
 | **Authors** | Chief Technology Officer, Principal Software Architect, DDD Consultant |
 | **Review Authority** | Enterprise Architecture Review Board (ARB) |
 | **Approvers** | Enterprise Governance Committee, Technical Design Authority |
 | **Classification** | Internal Enterprise Confidential |
-| **Governing References** | `Phase6_Engineering_Constitution.md`, `Enterprise Planning Standard v3.1` |
-| **Related Documents** | `Phase6_Roadmap.md`, `M6.3/Discovery.md`, `M6.2/Planning.md`, `M6.2/Audit_Report.md` |
+| **Related Discovery Document** | `docs/phase6/milestone_6_3/Discovery.md` |
+| **Related Roadmap** | `docs/phase6/Phase6_Roadmap.md` |
+| **Governing Standards** | `Phase6_Engineering_Constitution.md`, `Enterprise Planning Standard v3.1` |
 
 ### Revision History
 | Date | Version | Description | Authors |
 | :--- | :---: | :--- | :--- |
 | 2026-07-20 | 1.0.0 | Initial baseline draft defining planning state schema. | AI Architect |
-| 2026-07-21 | 3.1.0 | Complete specification aligned with Enterprise Planning Standard v3.1. | ARB Board |
+| 2026-07-21 | 3.1.0 | Redesigned structure compliant with Enterprise Planning Standard v3.1 Part 2A. | ARB Board |
 
 ### Purpose
 This document defines the formal, technology-independent architectural planning specification for the **Planning & Decision Engine** under Milestone 6.3. It establishes Bounded Contexts, Domain concepts, Component relationships, and architectural governance rules necessary to translate classified traveler intents into validated structured travel plans before execution.
@@ -32,34 +33,151 @@ This document defines the formal, technology-independent architectural planning 
 ## 2. Executive Summary
 
 ### Architecture Vision
-The Planning & Decision Engine serves as the cognitive reasoning engine of the RailYatra conversational layer. It decouples the formulation of multi-step travel activities from their execution. By parsing intent descriptors and slots into a structured sequence of actions and validating them against business policies, the engine ensures that only safe, valid, and consistent operations are passed to downstream processes.
+The Planning & Decision Engine serves as the core reasoning capability of the RailYatra platform. It decouples the formulation of multi-step travel activities from their execution. By parsing intent descriptors and slots into a structured sequence of actions and validating them against business policies, the engine ensures that only safe, valid, and consistent operations are passed to downstream business processes.
 
 ### Architecture Goals
-- **Separation of Concerns**: Isolate decision sequencing from execution adapters and external APIs.
-- **Fail Fast**: Intercept and reject plans that violate passenger policies, scheduling constraints, or route rules prior to execution.
-- **Explainability**: Log planning traces to explain decision reasoning to passengers.
+The primary goals are to establish clean separation of concerns, protect business rules through pre-execution validation, support the future evolution of autonomous planning, and minimize coupling between cognitive understanding and transaction engines.
 
-### Expected Outcomes
-A stateless planning framework that delivers:
-- A standardized, validated plan sequence containing conditional steps and explicit fallbacks.
-- Pre-execution policy enforcement blocking invalid bookings or conflicts.
-- Clear structural schemas for plans, steps, and validation results.
+### Business Alignment
+By validating traveling rules and scheduling options before committing financial transactions, the platform avoids redundant API costs, prevents traveler frustration from partial journey failures, and deflects routine planning queries from support desks.
+
+### Major Architectural Decisions
+- **Decoupled Validation Gate**: All generated travel plans must undergo a validation check against a catalog of rules before being approved.
+- **Stateless Plan Formulation**: The planning capability maintains no request state, operating fully in-memory to ensure scalability and reliability.
+
+### Expected Business Benefits
+- Lower transaction failure rates.
+- Faster resolution of multi-intent queries in a single turn.
+- Improved customer satisfaction and brand loyalty.
+
+### Expected Technical Benefits
+- Technology and framework independence.
+- High testability of planning rules in isolation.
+- Easy integration of new travel services (e.g., hotel bookings) without altering core orchestrator logic.
+
+### Future Evolution
+The design enables future milestones to introduce multi-agent planning and real-time waitlist hedging options without redesigning the validation or sequencing layers.
+
+### Implementation Readiness
+This specification provides complete conceptual models, boundaries, and rules, making it ready for the implementation phase.
 
 ---
 
-## 3. Planning Objectives
+## 3. Architecture Vision
 
-### Business Objectives
-- **Minimize Failed Bookings**: Intercept policy violations to reduce downstream transaction errors.
-- **Improve Conversational Resolution**: Complete compound, conditional user requests in a single lifecycle.
+### Business Vision
+The business vision is to provide travelers with an intelligent, conversational concierge that can handle complex, multi-leg journeys without requiring them to navigate multiple pages or fill out separate forms.
 
-### Architecture Objectives
-- **Maintain Clean Boundaries**: Ensure domain business logic is completely isolated from execution engines, database schemas, and AI models.
-- **Domain Integrity**: Model the travel plan as an immutable aggregate root to prevent state corruption during processing.
+### Technology Vision
+The technology vision is to build a modular, stateless planning system that communicates through well-defined, technology-independent data structures, ensuring the business logic remains isolated from framework and platform changes.
+
+### AI Vision
+The AI vision is to wrap AI capabilities with deterministic safety rules, using cognitive models for logical reasoning while relying on strict business rules to guarantee compliance and safety.
+
+### Platform Vision
+The platform vision is to establish a pluggable capability ecosystem where new travel services can register their functions, and the planning capability dynamically integrates them into traveler itineraries.
+
+### Enterprise Vision
+The enterprise vision is to set a benchmark for agentic travel orchestration, driving growth and reducing operational overheads through automation.
 
 ---
 
-## 4. Capability Model
+## 4. Architecture Goals
+
+### 1. Separation of Concerns
+- **Purpose**: Prevent transaction execution logic from leaking into planning stages.
+- **Business Value**: Keeps the system easy to test, maintain, and adapt.
+- **Architectural Strategy**: Establish distinct boundaries between intent parsing, plan formulation, validation, and execution.
+- **Trade-offs**: Adds a minor routing step to the transaction lifecycle.
+- **Future Evolution**: Allows changing execution adapters without modifying planning rules.
+
+### 2. Modularity
+- **Purpose**: Group related capabilities into isolated, single-purpose business functions.
+- **Business Value**: Accelerates feature delivery and reduces regression risks.
+- **Architectural Strategy**: Model constraint validation, plan sequencing, and clarification mapping as independent domains.
+- **Trade-offs**: Requires defining clean contracts between modules.
+- **Future Evolution**: Supports swapping individual modules (e.g., using a local rule checker instead of external APIs).
+
+### 3. Reliability & Trustworthiness
+- **Purpose**: Guarantee that only valid, safe, and policy-compliant plans are executed.
+- **Business Value**: Prevents incorrect bookings and financial penalties.
+- **Architectural Strategy**: Run a mandatory validation gate immediately after plan generation.
+- **Trade-offs**: Rejects plans that violate minor guidelines, requiring user confirmation.
+- **Future Evolution**: Support dynamic rule updating based on changes in railway policies.
+
+---
+
+## 5. Scope
+
+### Architecture In Scope
+- Designing the conceptual model for the Structured Travel Plan.
+- Defining the boundaries between the Planning Context and Governance Context.
+- Establishing rules for step sequencing, constraint checking, and conflict resolution.
+- Defining validation strategies for passenger details, dates, and connections.
+
+### Architecture Out Of Scope
+- Designing database tables, database connection wrappers, or caching layers.
+- Defining specific programming language classes, library structures, or framework files.
+- Configuring runtime servers or containers.
+
+### Future Scope
+- Coordinated multi-agent planning involving external hospitality and travel providers.
+- Real-time predictive trading and hedging options for waitlisted tickets.
+
+### Deferred Scope
+- Choosing specific serialization formats (e.g., JSON vs Protocol Buffers).
+- Defining precise event payloads for the local event bus.
+
+### Boundary Conditions
+- The planning capability assumes that incoming intent descriptors are normalized and scrubbed of PII.
+- The downstream execution engine is responsible for executing steps exactly as sequenced in the validated plan.
+
+### Planning Assumptions
+- The list of approved business functions is stable during plan formulation.
+- Validation rules (e.g., layover windows) can be represented as deterministic logic statements.
+
+---
+
+## 6. Constraints
+
+### 1. Logical Isolation
+- **Constraint**: The Planning & Decision Engine must not write to or read from transactional databases directly.
+- **Why**: Ensures the planning logic remains stateless and isolated from storage schemas.
+
+### 2. Responsiveness Budget
+- **Constraint**: Plan formulation and validation must complete within a minimal processing window.
+- **Why**: Keeps overall conversational latency low to prevent user abandonment.
+
+### 3. Regulatory Alignment
+- **Constraint**: Plans must strictly comply with railway policies (e.g., booking quotas, chart preparation windows).
+- **Why**: Prevents downstream booking cancellations or legal disputes.
+
+### 4. Privacy Boundaries
+- **Constraint**: Travel plan records must not contain unencrypted customer personal data in the audit logs.
+- **Why**: Complies with national data protection laws (e.g., DPDP Act).
+
+---
+
+## 7. Assumptions
+
+### 1. Validator Access
+- **Assumption**: Active business rules can be loaded from local files at startup.
+- **Risk if Incorrect**: Validation rules could lag behind policy changes, causing false approvals.
+- **Validation**: Compare local rule definitions with official policy changes weekly.
+
+### 2. Downstream Compatibility
+- **Assumption**: Downstream services can process structured step sequences and handle conditional logic.
+- **Risk if Incorrect**: The executor could get stuck or fail to handle branch paths.
+- **Validation**: Test execution scenarios against complex, branched plan templates.
+
+### 3. Capability Stability
+- **Assumption**: The catalog of approved business functions changes infrequently.
+- **Risk if Incorrect**: Dynamic plan generation could output references to expired or deleted services.
+- **Validation**: Validate generated plans against the registry of active business functions before approval.
+
+---
+
+## 8. Business Capability Model
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -73,45 +191,37 @@ A stateless planning framework that delivers:
 └───────────────────────┴────────────────────────┴───────────────────────┘
 ```
 
-### Business Capabilities
-- **Plan Formulation**: Evaluates intent descriptors to sequence required steps, resolve dependencies, and map fallback options.
-- **Plan Verification**: Assesses the structured plan against active business rules and rejects plans containing double-bookings, time conflicts, or policy violations.
-- **Ambiguity Resolution**: Detects missing slots or low classification confidence and formulates a plan segment to collect parameters from the traveler.
+- **Core Capabilities**: Step sequencing, constraint checking, conflict detection.
+- **Supporting Capabilities**: Clarification step mapping, default fallback handling.
+- **Shared Capabilities**: Audit logging, trace correlation.
+- **Ownership**: The Planning & Decision Context owns sequencing, while the Governance Context owns policy verification.
+- **Evolution**: Capability models will evolve to support multi-agent collaboration in future phases.
 
 ---
 
-## 5. Domain Model
+## 9. Capability Mapping
 
-```
-                 ┌───────────────────────────────┐
-                 │     Structured Travel Plan    │ (Aggregate Root)
-                 └───────────────┬───────────────┘
-                                 │
-         ┌───────────────────────┼───────────────────────┐
-         ▼                       ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    Plan Step    │     │   Constraint    │     │    Decision     │ (Entities & VOs)
-└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
-         │                       │                       │
-   ┌─────┴─────┐           ┌─────┴─────┐           ┌─────┴─────┐
-   ▼           ▼           ▼           ▼           ▼           ▼
-┌─────┐     ┌─────┐     ┌─────┐     ┌─────┐     ┌─────┐     ┌─────┐
-│Name │     │Args │     │Type │     │Scope│     │State│     │Rules│
-└─────┘     └─────┘     └─────┘     └─────┘     └─────┘     └─────┘
-```
-
-### Domain Concepts
-- **Structured Travel Plan (Aggregate Root)**: The complete domain model representing a validated sequence of actions to fulfill a traveler's goal. It is immutable once created.
-- **Plan Step (Entity)**: An individual action (e.g., search_seats, order_meals) containing inputs, dependencies, and execution constraints.
-- **Constraint (Value Object)**: A validation parameter (e.g., age limit, time window) that checks the validity of a step.
-- **Decision (Value Object)**: Represents a choice made by the engine during plan formulation, detailing the selection reason and matching rules.
+| Business Capability | Business Responsibility | Architecture Responsibility | Domain Owner | Future Evolution |
+| :--- | :--- | :--- | :--- | :--- |
+| **Plan Formulation** | Create step sequence based on traveler goals | Assemble structured plans, map prerequisites | Planning Context | Incorporate dynamic multi-agent negotiation |
+| **Plan Verification** | Verify plan safety and check constraints | Evaluate plans against policy catalogs | Governance Context | Support real-time rules updates |
+| **Ambiguity Resolution**| Request missing slots from traveler | Generate clarification plan segments | Planning Context | Support multi-turn slot recovery |
 
 ---
 
-## 6. Ubiquitous Language
+## 10. Domain Analysis
+
+- **Core Domain**: The Planning & Decision domain, responsible for mapping intent payloads to structured plan paths.
+- **Supporting Domains**: The Rule Evaluation domain, which handles logic validation against policies.
+- **Generic Domains**: The Logging & Audit domain, providing trace IDs and trace tracking.
+- **Relationships**: The Planning domain generates the plan structure, which is then verified by the Rule Evaluation domain.
+
+---
+
+## 11. Ubiquitous Language
 
 - **Structured Travel Plan**: A sequenced, validated set of steps created by the planning capability.
-- **Plan Step**: An atomic action within a plan sequence.
+- **Plan Step**: An individual action within a plan sequence.
 - **Constraint**: A business rule that restricts the execution of a plan step.
 - **Decision**: An option selected during plan formulation based on traveler slots.
 - **Approved Business Functions**: The registry of valid actions that the system can schedule.
@@ -119,184 +229,197 @@ A stateless planning framework that delivers:
 
 ---
 
-## 7. Bounded Contexts
+## 12. Domain Model
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   PLANNING & DECISION BOUNDED CONTEXT                  │
-│                                                                        │
-│  - Plan Sequencing       - Constraint Mapping                          │
-│  - Decision Logic        - Ambiguity Mappings                          │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼ Mapped Travel Plan
-┌────────────────────────────────────────────────────────────────────────┐
-│                     GOVERNANCE BOUNDED CONTEXT                         │
-│                                                                        │
-│  - Policy Verification   - Trust Sandboxing                            │
-│  - Safety Enforcement    - Audit Trails                                │
-└────────────────────────────────────────────────────────────────────────┘
-```
+The Domain Model centers around the **Structured Travel Plan** as the Aggregate Root. 
 
-### 1. Planning Bounded Context
-- **Purpose**: Sequenced action generation and slot matching.
-- **Responsibilities**: Analyze intent descriptors and assemble plan steps.
-- **Concept Mappings**: Travel Plan, Plan Step, Decisions, Approved Business Functions.
-
-### 2. Governance Bounded Context
-- **Purpose**: Verifies that plans conform to business rules and safety restrictions.
-- **Responsibilities**: Evaluate plans against the catalog of rules, reject unsafe paths, and log audit information.
-- **Concept Mappings**: Constraints, Policy Verification, Security Sandbox.
-
----
-
-## 8. Context Map
-
-- **Intent Understanding Context**: Upstream context supplying the `IntentDescriptor` containing categorized intents and parameter slots.
-- **Planning Context**: Receives the descriptor, formulates a sequence of steps, and maps dependencies.
-- **Governance Context**: Reviews the generated plan against business policies, rejecting or modifying plan sequences that violate restrictions.
-- **Execution Context**: Downstream context that processes the validated travel plan step-by-step.
-
----
-
-## 9. Aggregate Design
-
-### Structured Travel Plan (Aggregate Root)
-- **Entities**: `PlanStep`.
-- **Value Objects**: `Constraint`, `Decision`.
+- **Relationships**:
+  - The `Structured Travel Plan` contains a list of ordered `Plan Steps`.
+  - Each `Plan Step` references input arguments, expected outputs, and fallback steps.
+  - The `Structured Travel Plan` is linked to a validation report, which contains a collection of matched `Constraints` and `Decisions`.
 - **Invariants**:
   - A plan must contain at least one step.
-  - Steps must be logically ordered based on their prerequisites.
-  - No plan can contain conflicting tasks for the same traveler.
-  - The plan must carry a unique trace ID and validation status.
+  - Steps must be logically ordered based on prerequisites.
+  - Plans cannot contain conflicting tasks for the same passenger.
 
 ---
 
-## 10. Entity Strategy
+## 13. Bounded Context Identification
 
-- **PlanStep**: Holds a unique step identifier, action name, parameter arguments, and state status.
-- **Identity Lifecycle**: Step IDs are generated sequentially at plan formulation and remain stable throughout the request cycle.
+### 1. Planning Bounded Context
+- **Purpose**: Formulates the action sequence.
+- **Responsibilities**: Step sequencing, parameter mapping, dependency tracking.
+- **Owned Concepts**: Travel Plan, Plan Step, Approved Business Functions.
+- **Reason for Separation**: Isolates plan generation logic from validation and security rules, making it easier to test.
 
----
-
-## 11. Value Object Strategy
-
-- **Constraint**: Fully immutable. Holds type (e.g., date_window, double_booking), rule description, and parameters. Compared by value.
-- **Decision**: Fully immutable. Captures intent seg, applied rule, outcome choice, and confidence value.
-
----
-
-## 12. Domain Services
-
-- **PlanFormulator**: Ingests `IntentDescriptor` and generates a raw sequence of steps.
-- **PlanValidator**: Iterates through steps and applies active business policies, returning a validation report.
-- **StepSequencer**: Analyzes step dependencies and schedules them for sequential or parallel execution.
+### 2. Governance Bounded Context
+- **Purpose**: Verifies that plans conform to active policies.
+- **Responsibilities**: Policy enforcement, safety checks, audit logs.
+- **Owned Concepts**: Constraints, Policy Verification, Security Sandbox.
+- **Reason for Separation**: Ensures business rules are checked objectively, serving as a safety filter for generated plans.
 
 ---
 
-## 13. Domain Policies
+## 14. Context Ownership Matrix
 
-- **PII Integrity Policy**: Ensures no unredacted personal details are saved in the plan metadata.
-- **Lockout Policy**: Restricts plan generation for departures falling within the railway chart preparation window.
-- **Verification Policy**: Rejects plans that feature age-restricted discounts when age parameters are missing or invalid.
-
----
-
-## 14. Domain Events
-
-- **`plan_formulated`**: Published when a sequence of steps is successfully assembled.
-- **`plan_verified`**: Published after the policy validation pass completes, indicating whether the plan is valid or rejected.
-- **`plan_conflict_detected`**: Published when logical conflicts are identified during validation.
+| Context | Primary Owner | Supporting Teams | Consumed Services | Published Responsibilities | Business Accountability | Architecture Accountability |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Planning Context** | Planning Team | NLP Team | Intent Services | Formulated plan payload | Formulate valid plan sequences | Decoupled sequencing models |
+| **Governance Context**| Compliance Team | Security Team | Configuration Services| Plan validation report | Prevent rule violations | Deterministic rule execution |
 
 ---
 
-## 15. Repository Strategy
+## 15. Context Map
 
-The Planning Bounded Context remains completely stateless and database-independent. It does not persistent plans to databases. Any plan history retrieval or state preservation is deferred to downstream memory contexts (Milestone 6.5).
+- **Intent Context $\rightarrow$ Planning Context [Customer/Supplier]**: The Planning Context depends on the output of the Intent Context. The Intent Context acts as the supplier.
+- **Planning Context $\rightarrow$ Governance Context [Anti-Corruption Layer]**: The Governance Context reviews plans generated by the Planning Context, checking them against strict business rules to protect downstream systems from errors.
+- **Governance Context $\rightarrow$ Execution Context [Customer/Supplier]**: The Execution Context consumes validated plans from the Governance Context.
 
 ---
 
-## 16. Application Services
+## 16. Context Boundary Rules
+
+- **Allowed Communication**: The Planning Context passes the draft plan to the Governance Context. The Governance Context passes the validated plan to the Execution Context.
+- **Forbidden Dependencies**: The Planning Context must never call execution services directly.
+- **Isolation Rules**: The Governance Context must not make network requests; all validation rules must be checked locally using pre-loaded configurations.
+
+---
+
+## 17. Aggregate Strategy
+
+### Structured Travel Plan
+- **Aggregate Root**: `Structured Travel Plan`.
+- **Responsibilities**: Tracks the overall plan state, sequences steps, and records validation outcomes.
+- **Consistency Boundary**: Covers all steps, constraints, and decisions. Any changes to a step must update the parent plan's validation status.
+- **Lifecycle**: Formulated per request, validated, signed by the coordinator, and set to read-only status.
+
+---
+
+## 18. Entity Strategy
+
+- **PlanStep**:
+  - **Purpose**: Represents an individual business action in the sequence.
+  - **Identity**: Sequence ID generated at plan formulation.
+  - **Lifecycle**: Changes status from pending to active during downstream execution.
+  - **Ownership**: Contained within the Structured Travel Plan.
+
+---
+
+## 19. Value Object Strategy
+
+- **Constraint**:
+  - **Purpose**: Defines validation parameters.
+  - **Immutability**: Fully immutable; values cannot be changed after creation.
+  - **Validation**: Checked against the passenger profile and timing rules.
+
+- **Decision**:
+  - **Purpose**: Records reasoning behind plan adjustments.
+  - **Immutability**: Fully immutable.
+
+---
+
+## 20. Domain Service Strategy
+
+- **StepSequencer**: Coordinates step ordering based on input-output dependencies. This logic is handled as a domain service because it coordinates relationships across multiple steps.
+- **PlanValidator**: Reviews the sequence of steps against validation rules. This is modeled as a service since validation checks span the entire plan.
+
+---
+
+## 21. Domain Policy Strategy
+
+- **Lockout Policy**: Restricts plan generation for trains departing within the chart preparation window.
+- **Identity Safety Policy**: Prevents bookings where traveler credentials do not match passenger profiles.
+- **Concession Validation Policy**: Restricts the application of age-based discounts unless age inputs are verified.
+
+---
+
+## 22. Domain Event Strategy
+
+- **`plan_formulated`**: Emitted when a sequence of steps is successfully assembled.
+- **`plan_verified`**: Emitted after the validation pass completes, indicating if the plan is approved or rejected.
+- **`plan_conflict_detected`**: Emitted when overlapping bookings or logic errors are detected.
+
+---
+
+## 23. Repository Strategy
+
+The Planning Context is completely stateless and database-independent. It does not persist plans. It receives inputs, formulates plan structures in memory, and passes them to downstream components. Any state persistence is handled by downstream memory components.
+
+---
+
+## 24. Factory Strategy
+
+- **StructuredTravelPlanFactory**: Used to ensure that all plans are created with required metadata, a unique trace ID, and an initial validation status, preserving domain invariants.
+
+---
+
+## 25. Specification Strategy
+
+- **AgeEligibleSpecification**: Verifies passenger age details before senior citizen discounts are approved.
+- **TimeWindowSpecification**: Validates layover windows and departure locks.
+- **DoubleBookingSpecification**: Checks that the passenger has no overlapping bookings for the scheduled travel window.
+
+---
+
+## 26. Application Services
 
 - **PlanningCoordinator**: Manages the orchestration flow: parses intent $\rightarrow$ formulates plan $\rightarrow$ runs validation $\rightarrow$ signs plan.
 - **ClarificationHandler**: Formulates a customized step sequence to request missing details when slot sufficiency checks fail.
 
 ---
 
-## 17. Clean Architecture Boundary Design
+## 27. Use Case Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      INFRASTRUCTURE LAYER                   │
-│  (Config files, Gateway APIs, Loggers)                      │
-│                                                             │
-│       ┌──────────────────────────────────────────────┐      │
-│       │               APPLICATION LAYER              │      │
-│       │  (PlanningCoordinator, ClarificationHandler) │      │
-│       │                                              │      │
-│       │       ┌──────────────────────────────┐       │      │
-│       │       │         DOMAIN LAYER         │       │      │
-│       │       │  (TravelPlan, PlanStep,      │       │      │
-│       │       │   PlanValidator)             │       │      │
-│       │       └──────────────────────────────┘       │      │
-│       └──────────────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-- **Domain Layer**: Holds pure business concepts (TravelPlan, PlanStep, Constraints) and domain services (PlanValidator). Imports nothing from other layers.
-- **Application Layer**: Coordinates the flow, handles intent ingestion, and builds the plan. Depends only on the Domain Layer.
-- **Infrastructure Layer**: Exposes outer interfaces, parses configuration files, and records audit logs. Depends on the Application Layer.
+- **Ingest Intent Payload**: Processes the `IntentDescriptor` and parses it into planning slots.
+- **Sequence Steps**: Generates the list of actions and maps prerequisite dependencies.
+- **Run Policy Review**: Validates steps against active business policies.
+- **Handle Missing Parameters**: Identifies missing required slots and builds a clarification plan.
 
 ---
 
-## 18. Interaction Architecture
+## 28. Interaction Architecture
 
 ```
 [Gateway API] ──▶ [PlanningCoordinator]
                        │
-                       ├──▶ 1. Ingest IntentDescriptor
-                       ├──▶ 2. Ingest Rules Config
-                       ├──▶ 3. Call PlanFormulator (Domain)
-                       ├──▶ 4. Call PlanValidator (Domain)
+                       ├──▶ 1. Call PlanFormulator (Domain)
+                       ├──▶ 2. Call PlanValidator (Domain)
                        │
                        ▼
-[Validated Travel Plan] ──▶ [Execution Gateway]
+[Validated Travel Plan] ──▶ [Execution Layer]
 ```
 
-1. Gateway passes the `IntentDescriptor` to the `PlanningCoordinator`.
-2. The coordinator retrieves the active rules and calls `PlanFormulator`.
-3. The formulator maps goals to sequenced steps.
-4. `PlanValidator` reviews the plan against rules and appends validation results.
-5. The verified plan is returned to the execution layer.
+- The API Gateway passes the intent descriptor to the coordinator.
+- The coordinator requests the formulator to sequence steps.
+- The coordinator passes the draft plan to the validator to run policy checks.
+- The validated plan is returned to the execution layer.
 
 ---
 
-## 19. AI Orchestration Architecture
+## 29. AI Orchestration Architecture
 
-The planning engine utilizes a hybrid approach:
-- **Heuristic Templates**: For simple, standard goals (e.g., status queries), the engine uses static, pre-defined templates to sequence steps instantly.
-- **Dynamic Reasoning**: For complex, multi-intent requests, the engine translates the user’s goals into a structured prompt, using an abstracted model interface to draft the steps.
-- **Validation Shield**: The dynamically generated plan must pass through the deterministic `PlanValidator` (Domain Layer) to ensure no unsafe steps are scheduled.
-
----
-
-## 20. Security Architecture
-
-- **Capability Sandboxing**: Plan steps can only use actions defined in the system’s registry of approved business functions. Any unrecognized action is discarded during validation.
-- **Parameter Sanitization**: Input slots (e.g., station codes, train numbers) are matched against system rules to prevent injection attempts.
-- **Author Identity Check**: The validation layer verifies that the traveler ID matches the owner of the resources (e.g., ticket records) before planning modifications.
+- **Template Selection**: Directs simple intents through pre-defined planning templates.
+- **Dynamic Planning**: Uses cognitive reasoning to draft plan structures for complex, compound intents.
+- **Policy Guardrail**: All dynamically generated steps must pass through the validation gate, protecting the system from errors.
 
 ---
 
-## 21. Configuration Architecture
+## 30. Security Architecture
 
-- **Rule Catalogs**: Validation rules are loaded from configurable files, enabling changes without altering the code.
-- **Confidence Cutoffs**: Threshold values for slot sufficiency and plan confidence are managed through configuration.
-- **Active Feature Flags**: Allows toggling dynamic plan generation paths.
+- **Sandboxing**: Plan steps can only invoke approved business functions.
+- **Sanitization**: Validates slots against strict type rules to block injection attempts.
+- **Authorization Verification**: Verifies that the traveler ID matches the owner of the resources referenced in the plan steps.
 
 ---
 
-## 22. Observability Architecture
+## 31. Configuration Architecture
+
+- **Rule Catalog**: Loads validation parameters and policies from dynamic configuration files.
+- **Cutoffs Configuration**: Manages threshold parameters for plan validation and slot sufficiency.
+
+---
+
+## 32. Observability Architecture
 
 - **Correlation Traces**: The plan maintains a unique trace ID, linking all log entries, validation checks, and subsequent execution stages.
 - **Audit Trails**: Formulates a validation report detail sheet within the plan metadata, recording which rules were checked and the outcomes.
@@ -304,39 +427,50 @@ The planning engine utilizes a hybrid approach:
 
 ---
 
-## 23. Reliability Architecture
+## 33. Reliability Strategy
 
-- **Stateless Concurrency**: The system holds no request state in memory, allowing any available node to formulate plans.
-- **Safe Fallbacks**: If dynamic plan generation fails or times out, the coordinator falls back to a default, safe template plan (e.g., routing the user to a general conversation flow).
-- **Graceful Failure Isolation**: Failures in constraint validation do not crash the request; they result in a rejected plan payload containing clear explanation details.
+- **Stateless Operation**: Planning nodes are stateless, allowing requests to be balanced across any active node.
+- **Safe Fallbacks**: Falls back to simple default plans if dynamic generation fails or times out.
 
 ---
 
-## 24. Performance Strategy
+## 34. Error Taxonomy
+
+- **Validation Failures**: Occur when inputs or slot types are invalid; handled by rejecting the plan.
+- **System Failures**: Occur when external APIs fail; resolved by falling back to local heuristic routing.
+
+---
+
+## 35. Failure Strategy
+
+- **Clarification Plans**: If required slots are missing, the system generates a plan segment designed to collect the missing parameters from the traveler.
+- **Fallback Paths**: Plans include backup branches (e.g., if checking Train A seats returns full, run search for Train B).
+
+---
+
+## 36. Performance Strategy
 
 - **Pre-computed Sequences**: The formulator maintains a cache of common plans to bypass dynamic generation for routine queries.
 - **Optimized Policy Evaluation**: The validator uses quick, local logic checks to inspect rules, ensuring validation is completed efficiently.
-- **Thread Safety**: Domain components are designed to be stateless and immutable, avoiding resource contention under concurrent requests.
 
 ---
 
-## 25. Failure Strategy
+## 37. Extensibility Strategy
 
-- **Ambiguity Detection**: If slot validation detects missing required values, the formulator generates a clarification plan to ask the traveler for the missing details.
-- **Step Failure Recovery**: Plans include fallback branches (e.g., if checking Train A seats returns full, run search for Train B).
-- **Plan Rejection**: When a validation constraint is violated, the coordinator marks the plan status as rejected and maps the rejection reasons to explanation templates.
-
----
-
-## 26. Extensibility Strategy
-
-- **Dynamic Capability Registry**: New capabilities can be registered by adding their definitions to the approved business functions catalog.
-- **Pluggable Policy Rules**: New policies can be implemented as independent validation rules that fit into the validation loop without modifying other components.
-- **Contract Compatibility**: Plan structures are versioned to ensure backward compatibility with older executors.
+- **Pluggable Rules**: New policies can be implemented as independent validation rules and registered in the validation loop without code changes.
+- **Standard Contracts**: Versioned plan schemas ensure compatibility with older executors.
 
 ---
 
-## 27. Architecture Decision Records (ADR)
+## 38. Evolution Roadmap
+
+- **Immediate**: Integrate the planning coordinator with the orchestrator.
+- **Near-Term**: Add support for complex conditional branches.
+- **Long-Term**: Support multi-agent collaboration across external providers.
+
+---
+
+## 39. Architecture Decision Records (ADRs)
 
 ### ADR-M6.3-001: Decoupled Policy Validation Gate
 - **Context**: Executing travel actions directly can lead to transaction failures and wasted fees if basic constraints (e.g., age limits or booking windows) are violated.
@@ -354,49 +488,33 @@ The planning engine utilizes a hybrid approach:
 
 ---
 
-## 28. Risk Register
+## 40. Risk Register
 
 | Risk Identifier | Business Description | Likelihood | Impact | Mitigation Strategy | Owner | Residual Risk |
 | :--- | :--- | :---: | :---: | :--- | :--- | :---: |
 | **RSK-PLN-01** | **Plan Manipulation**: Prompts designed to trigger unauthorized actions. | Low | High | Restrict step types to approved business functions. | Sec Lead | Very Low |
 | **RSK-PLN-02** | **Stale Constraints**: Validation rules do not align with updated railway policies. | Medium | High | Decouple validation rules from code and update them dynamically. | Ops Lead | Low |
-| **RSK-PLN-03** | **Logic Loops**: The engine gets stuck generating fallback steps. | Low | Medium | Limit the maximum number of steps in a plan. | Dev Lead | Low |
 
 ---
 
-## 29. Work Breakdown Structure
+## 41. Work Breakdown Structure
 
-### WP1: Core Domain Definitions
-- **Objective**: Implement plan schemas, steps, and constraint models.
-- **Deliverables**: Domain types, Value Objects, and test assertions.
-- **Success Criteria**: Zero compile errors.
-
-### WP2: Plan Formulator & Sequencer
-- **Objective**: Develop step sequencing and fallback mapping.
-- **Deliverables**: Formulator service, template registry, and sequencing rules.
-- **Success Criteria**: Test cases correctly sequence compound actions.
-
-### WP3: Policy Validation Gate
-- **Objective**: Implement validation logic and constraint checks.
-- **Deliverables**: Validator service, rule catalogs, and validation reporting.
-- **Success Criteria**: Correctly rejects plans violating time and age rules.
-
-### WP4: Graph Integration & Verification
-- **Objective**: Integrate the planning coordinator into the orchestrator workflow.
-- **Deliverables**: Orchestrator node adjustments, state mapping, and integration tests.
-- **Success Criteria**: Dynamic plan formulation executes within the target system latency.
+- **WP1: Domain Models**: Implement plan structures, steps, and constraint models.
+- **WP2: Step Sequencing**: Develop sequencing logic and fallback mapping.
+- **WP3: Validation Gate**: Implement policy rules and validation checks.
+- **WP4: Orchestrator Integration**: Integrate the coordinator with the state graph.
 
 ---
 
-## 30. Deliverables
+## 42. Deliverables
 
-- **Architecture Planning**: Milestone 6.3 Planning Blueprint (`Planning.md`).
+- **Architecture Planning**: Milestone 6.3 Planning Specification (`Planning.md`).
 - **Technical Walkthrough**: Walkthrough reports and rollback guides.
 - **Verification Reports**: Code quality audits and test coverage reports.
 
 ---
 
-## 31. Architecture Review Checklist
+## 43. Architecture Review Checklist
 
 - [x] Planning domain logic is isolated from execution code.
 - [x] No concrete programming language syntax or library dependencies are specified.
@@ -406,7 +524,7 @@ The planning engine utilizes a hybrid approach:
 
 ---
 
-## 32. Common Anti-Patterns
+## 44. Anti-Patterns
 
 ### Anti-Patterns We Avoid
 - **Framework Coupling**: Domain concepts are kept technology-independent.
@@ -415,7 +533,7 @@ The planning engine utilizes a hybrid approach:
 
 ---
 
-## 33. Quality Gates
+## 45. Quality Gates
 
 - **Static Validation**: All domain types must pass static compilation checks.
 - **Test Coverage**: Unit tests must cover all validation rules, checking both valid and invalid scenarios.
@@ -423,7 +541,7 @@ The planning engine utilizes a hybrid approach:
 
 ---
 
-## 34. Architecture Readiness Assessment
+## 46. Architecture Readiness Assessment
 
 - **Domain Model Completeness**: 9.0 / 10
 - **Interaction Contract Definition**: 8.8 / 10
@@ -436,12 +554,12 @@ The planning engine utilizes a hybrid approach:
 
 ---
 
-## 35. Architecture Freeze
+## 47. Architecture Freeze
 
 The Enterprise Architecture Review Board confirms that this specification satisfies the Milestone 6.3 requirements. The architecture is frozen and approved for transition to implementation.
 
 ---
 
-## 36. Transition to Implementation Execution Plan (IEP)
+## 48. Transition to Implementation Execution Plan (IEP)
 
 The design contracts, domain models, and validation rules defined in this specification serve as the single source of truth for the subsequent implementation. Coding will proceed in accordance with the work breakdown structure.
