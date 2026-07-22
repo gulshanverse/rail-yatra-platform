@@ -1,6 +1,6 @@
 {
   "name": "ai-service",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "lint": "node -e \"const { execSync } = require('child_process'); const cmd = process.platform === 'win32' ? 'venv\\\\Scripts\\\\ruff check .' : './venv/bin/ruff check .'; try { execSync(cmd, { stdio: 'inherit' }); } catch (e) { process.exit(1); }\"",
