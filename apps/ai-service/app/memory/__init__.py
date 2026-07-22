@@ -1,0 +1,177 @@
+"""
+AI Memory Platform Package for Phase 6 — Milestone 6.5.
+Provides Domain-Driven Memory Management, Consent Governance, CQRS Application Services,
+and Context Persistence for RailYatra AI Agents.
+"""
+
+from app.memory.domain.value_objects import (
+    TravelerId,
+    MemoryId,
+    MemoryCategory,
+    ConfidenceScore,
+    RetentionPolicy,
+    ConsentStatus,
+    ConsentStatusEnum,
+    BerthPreference,
+    BerthPreferenceEnum,
+    RouteFrequency,
+)
+from app.memory.domain.entities import (
+    TravelerProfile,
+    PreferenceStore,
+    JourneyHistory,
+    CompanionRecord,
+    MemoryAuditEntry,
+)
+from app.memory.domain.aggregates import (
+    TravelerMemory,
+    ConsentProfile,
+    JourneySagaMemory,
+)
+from app.memory.domain.events import (
+    DomainEvent,
+    MemoryCreatedEvent,
+    PreferenceUpdatedEvent,
+    ConsentGrantedEvent,
+    ConsentWithdrawnEvent,
+    MemoryPurgedEvent,
+    JourneySagaResumedEvent,
+    PreferenceConflictDetectedEvent,
+)
+from app.memory.domain.specifications import (
+    ConsentGrantedSpecification,
+    EligibleForStorageSpecification,
+    EligibleForRetrievalSpecification,
+    MemoryExpiredSpecification,
+)
+from app.memory.domain.policies import (
+    ConsentPolicy,
+    ConflictResolutionPolicy,
+    RetentionPolicyEvaluator,
+    PrivacyPolicy,
+)
+from app.memory.domain.services import (
+    MemoryClassificationService,
+    MemoryConsolidationService,
+    ConsentEvaluationService,
+    MemoryQualityService,
+    MemoryPurgeService,
+)
+from app.memory.domain.repositories import (
+    ITravelerMemoryRepository,
+    IConsentProfileRepository,
+    IJourneySagaRepository,
+    IMemoryAuditLogger,
+    InMemoryTravelerMemoryRepository,
+    InMemoryConsentProfileRepository,
+    InMemoryJourneySagaRepository,
+    InMemoryAuditLogger,
+)
+from app.memory.application.cqrs import (
+    CreateMemoryCommand,
+    UpdatePreferenceCommand,
+    GrantConsentCommand,
+    WithdrawConsentCommand,
+    ResumeSagaCommand,
+    GetTravelerMemoryQuery,
+    GetRecentContextQuery,
+    GetConsentStatusQuery,
+    GetMemoryAuditQuery,
+)
+from app.memory.application.services import (
+    MemoryApplicationService,
+    ConsentApplicationService,
+    JourneySagaApplicationService,
+    MemoryGovernanceApplicationService,
+)
+from app.memory.state_machine import MemoryStateMachine, MemoryLifecycleState
+from app.memory.exceptions import (
+    ConsentMissingException,
+    ConsentWithdrawnException,
+    InvalidAggregateStateException,
+    PreferenceConflictException,
+    SagaExpiredException,
+    PurgedMemoryAccessException,
+    InvariantViolationException,
+    IllegalStateTransitionException,
+)
+
+from app.memory.config import MemoryConfig, default_memory_config
+from app.memory.telemetry import MemoryTelemetryCollector, telemetry_collector
+
+__all__ = [
+    "TravelerId",
+    "MemoryId",
+    "MemoryCategory",
+    "ConfidenceScore",
+    "RetentionPolicy",
+    "ConsentStatus",
+    "ConsentStatusEnum",
+    "BerthPreference",
+    "BerthPreferenceEnum",
+    "RouteFrequency",
+    "TravelerProfile",
+    "PreferenceStore",
+    "JourneyHistory",
+    "CompanionRecord",
+    "MemoryAuditEntry",
+    "TravelerMemory",
+    "ConsentProfile",
+    "JourneySagaMemory",
+    "DomainEvent",
+    "MemoryCreatedEvent",
+    "PreferenceUpdatedEvent",
+    "ConsentGrantedEvent",
+    "ConsentWithdrawnEvent",
+    "MemoryPurgedEvent",
+    "JourneySagaResumedEvent",
+    "PreferenceConflictDetectedEvent",
+    "ConsentGrantedSpecification",
+    "EligibleForStorageSpecification",
+    "EligibleForRetrievalSpecification",
+    "MemoryExpiredSpecification",
+    "ConsentPolicy",
+    "ConflictResolutionPolicy",
+    "RetentionPolicyEvaluator",
+    "PrivacyPolicy",
+    "MemoryClassificationService",
+    "MemoryConsolidationService",
+    "ConsentEvaluationService",
+    "MemoryQualityService",
+    "MemoryPurgeService",
+    "ITravelerMemoryRepository",
+    "IConsentProfileRepository",
+    "IJourneySagaRepository",
+    "IMemoryAuditLogger",
+    "InMemoryTravelerMemoryRepository",
+    "InMemoryConsentProfileRepository",
+    "InMemoryJourneySagaRepository",
+    "InMemoryAuditLogger",
+    "CreateMemoryCommand",
+    "UpdatePreferenceCommand",
+    "GrantConsentCommand",
+    "WithdrawConsentCommand",
+    "ResumeSagaCommand",
+    "GetTravelerMemoryQuery",
+    "GetRecentContextQuery",
+    "GetConsentStatusQuery",
+    "GetMemoryAuditQuery",
+    "MemoryApplicationService",
+    "ConsentApplicationService",
+    "JourneySagaApplicationService",
+    "MemoryGovernanceApplicationService",
+    "MemoryStateMachine",
+    "MemoryLifecycleState",
+    "ConsentMissingException",
+    "ConsentWithdrawnException",
+    "InvalidAggregateStateException",
+    "PreferenceConflictException",
+    "SagaExpiredException",
+    "PurgedMemoryAccessException",
+    "InvariantViolationException",
+    "IllegalStateTransitionException",
+    "MemoryConfig",
+    "default_memory_config",
+    "MemoryTelemetryCollector",
+    "telemetry_collector",
+]
