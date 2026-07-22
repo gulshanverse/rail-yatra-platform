@@ -19,7 +19,7 @@ from app.memory.domain.repositories import (
 )
 from app.memory.domain.value_objects import TravelerId
 from app.memory.domain.aggregates import JourneySagaMemory
-from app.memory.exceptions import ConsentMissingException, ConsentWithdrawnException
+from app.memory.exceptions import ConsentMissingException
 
 
 def test_use_case_uc_mem_01_store_profile():
