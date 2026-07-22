@@ -19,7 +19,7 @@ from app.memory.domain.repositories import (
 )
 from app.memory.domain.value_objects import TravelerId
 from app.memory.domain.aggregates import JourneySagaMemory
-from app.memory.exceptions import ConsentMissingException, ConsentWithdrawnException
+from app.memory.exceptions import ConsentMissingException
 
 
 def test_use_case_uc_mem_01_store_profile():
@@ -125,7 +125,9 @@ def test_use_case_uc_mem_03_resume_booking_saga():
     assert ctx_res["saga"]["current_step"] == "PAYMENT_PENDING"
 
     # Resume saga workflow
-    resume_res = saga_svc.resume_booking_saga(saga_id=saga.saga_id, traveler_id=traveler_id)
+    resume_res = saga_svc.resume_booking_saga(
+        saga_id=saga.saga_id, traveler_id=traveler_id
+    )
     assert resume_res["status"] == "SUCCESS"
     assert resume_res["saga"]["origin"] == "NDLS"
     assert resume_res["saga"]["destination"] == "PUNE"
@@ -197,4 +199,3 @@ def test_telemetry_and_config():
     summary = telemetry_collector.get_metrics_summary()
     assert summary["counters"]["query_hits_total"] == 5
     assert summary["total_spans_recorded"] > 0
-

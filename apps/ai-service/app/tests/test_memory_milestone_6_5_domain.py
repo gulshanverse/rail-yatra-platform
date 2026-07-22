@@ -8,21 +8,14 @@ import time
 
 from app.memory.domain.value_objects import (
     TravelerId,
-    MemoryId,
     ConfidenceScore,
     RetentionPolicy,
-    ConsentStatus,
-    ConsentStatusEnum,
     BerthPreference,
     BerthPreferenceEnum,
-    RouteFrequency,
 )
 from app.memory.domain.entities import (
     TravelerProfile,
-    PreferenceStore,
-    JourneyHistory,
     CompanionRecord,
-    MemoryAuditEntry,
 )
 from app.memory.domain.aggregates import (
     TravelerMemory,
@@ -32,21 +25,10 @@ from app.memory.domain.aggregates import (
 from app.memory.domain.policies import (
     ConsentPolicy,
     ConflictResolutionPolicy,
-    RetentionPolicyEvaluator,
     PrivacyPolicy,
 )
 from app.memory.domain.specifications import (
     ConsentGrantedSpecification,
-    EligibleForStorageSpecification,
-    EligibleForRetrievalSpecification,
-    MemoryExpiredSpecification,
-)
-from app.memory.domain.services import (
-    MemoryClassificationService,
-    MemoryConsolidationService,
-    ConsentEvaluationService,
-    MemoryQualityService,
-    MemoryPurgeService,
 )
 from app.memory.state_machine import MemoryStateMachine, MemoryLifecycleState
 from app.memory.exceptions import (
@@ -82,12 +64,16 @@ def test_value_objects_validation():
 def test_traveler_profile_and_concession():
     """Verify BR-MEM-003 Senior Concession logic on TravelerProfile entity."""
     t_id = TravelerId("T1002")
-    profile = TravelerProfile(traveler_id=t_id, full_name="Mr. Sharma", age=67, gender="M")
+    profile = TravelerProfile(
+        traveler_id=t_id, full_name="Mr. Sharma", age=67, gender="M"
+    )
 
     assert profile.is_senior_citizen is True
     assert profile.senior_concession_eligible is True
 
-    comp = CompanionRecord(name="Mrs. Sharma", age=64, gender="F", relationship="SPOUSE")
+    comp = CompanionRecord(
+        name="Mrs. Sharma", age=64, gender="F", relationship="SPOUSE"
+    )
     profile.add_companion(comp)
     assert len(profile.companions) == 1
 
