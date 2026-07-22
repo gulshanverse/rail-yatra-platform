@@ -64,12 +64,16 @@ def test_value_objects_validation():
 def test_traveler_profile_and_concession():
     """Verify BR-MEM-003 Senior Concession logic on TravelerProfile entity."""
     t_id = TravelerId("T1002")
-    profile = TravelerProfile(traveler_id=t_id, full_name="Mr. Sharma", age=67, gender="M")
+    profile = TravelerProfile(
+        traveler_id=t_id, full_name="Mr. Sharma", age=67, gender="M"
+    )
 
     assert profile.is_senior_citizen is True
     assert profile.senior_concession_eligible is True
 
-    comp = CompanionRecord(name="Mrs. Sharma", age=64, gender="F", relationship="SPOUSE")
+    comp = CompanionRecord(
+        name="Mrs. Sharma", age=64, gender="F", relationship="SPOUSE"
+    )
     profile.add_companion(comp)
     assert len(profile.companions) == 1
 
