@@ -4,7 +4,7 @@ Exposes endpoints for Waitlist forecasting, Delay projections, Risk evaluation,
 Alternative journey orchestration, Station congestion, and Continuous learning.
 """
 
-from typing import Dict, Any, Optional
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.predictive.interfaces import (

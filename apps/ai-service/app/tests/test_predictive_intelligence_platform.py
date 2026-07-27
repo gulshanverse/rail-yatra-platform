@@ -263,8 +263,6 @@ def test_predictive_orchestrator_full_package(journey_sample, passenger_sample):
 
 # --- REST API Endpoints Integration Test ---
 def test_predictive_api_endpoints(journey_sample, passenger_sample):
-    from app.main import app
-    from app.api.predictive_router import router as predictive_router
     app.include_router(predictive_router)
     test_client = TestClient(app)
     payload = {

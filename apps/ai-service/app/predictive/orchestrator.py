@@ -8,16 +8,11 @@ from typing import Dict, Any, Optional
 from app.predictive.interfaces import (
     PassengerProfileContext,
     JourneyContext,
-    WaitlistPrediction,
-    DelayPrediction,
     SeatAvailabilityProjection,
     StationCongestionForecast,
-    RiskEvaluation,
     AlternativeJourneyRecommendation,
-    ProactiveAlert,
     CalibratedPredictionOutput,
     LearningOutcomeSignal,
-    ConsentStatus,
 )
 from app.predictive.waitlist import WaitlistForecaster
 from app.predictive.delay import ArrivalDelayPredictor
@@ -59,7 +54,7 @@ class PredictiveIntelligenceOrchestrator:
         if not self.governance_controller.validate_consent(passenger_ctx):
             raise PermissionError("DPDP Consent denied for personalized waitlist prediction.")
 
-        clean_passenger = self.governance_controller.sanitize_profile_for_prediction(passenger_ctx)
+        self.governance_controller.sanitize_profile_for_prediction(passenger_ctx)
         pred = await self.waitlist_forecaster.predict_confirmation(journey)
         wrapped = self.guidance_engine.wrap_waitlist_prediction(pred)
         return self.governance_controller.audit_prediction_payload(wrapped)

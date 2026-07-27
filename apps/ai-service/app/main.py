@@ -7,7 +7,6 @@ import uvicorn
 
 from app.api.endpoints import router as api_router
 from app.api.intelligence import router as intelligence_router
-from app.api.predictive_router import router as predictive_router
 from app.vector.qdrant import qdrant_rag
 from app.data.syncer import railway_background_syncer
 from app.memory.short_term import short_term_memory
