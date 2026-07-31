@@ -10,6 +10,7 @@ from app.api.intelligence import router as intelligence_router
 from app.api.predictive_router import router as predictive_router
 from app.api.realtime_router import router as realtime_router
 from app.api.integration_router import router as integration_router
+from app.api.production_router import router as production_router
 from app.vector.qdrant import qdrant_rag
 from app.data.syncer import railway_background_syncer
 from app.memory.short_term import short_term_memory
@@ -71,6 +72,7 @@ app.include_router(intelligence_router)
 app.include_router(predictive_router)
 app.include_router(realtime_router)
 app.include_router(integration_router)
+app.include_router(production_router)
 app.include_router(health_router)
 
 
