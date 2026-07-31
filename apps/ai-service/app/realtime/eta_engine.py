@@ -21,10 +21,10 @@ class ETAEngine:
         predicted_dt = scheduled_dt + timedelta(minutes=delay_mins)
 
         confidence = 0.95
-        if delay_mins > 60:
-            confidence = 0.80
-        elif delay_mins > 120:
+        if delay_mins > 120:
             confidence = 0.65
+        elif delay_mins > 60:
+            confidence = 0.80
 
         return ETAResult(
             train_number=train_state.train_number if train_state else "UNKNOWN",

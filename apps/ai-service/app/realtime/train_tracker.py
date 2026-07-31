@@ -2,10 +2,13 @@
 Live Train State Tracker: Maintains authoritative train operational status and location.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional, List
 from app.realtime.interfaces import EventType, TrainStatus
 from app.realtime.models import OperationalEvent, TrainState
+
+logger = logging.getLogger("ai-service.realtime.train_tracker")
 
 
 class TrainTracker:
@@ -61,6 +64,27 @@ class TrainTracker:
         elif event.event_type == EventType.TRAIN_RESCHEDULED:
             status = TrainStatus.DELAYED
 
+        # Enforce state machine transition validation
+        allowed = {
+            TrainStatus.SCHEDULED: {TrainStatus.SCHEDULED, TrainStatus.BOARDING, TrainStatus.DEPARTED, TrainStatus.RUNNING, TrainStatus.DELAYED, TrainStatus.CANCELLED, TrainStatus.DIVERTED},
+            TrainStatus.BOARDING: {TrainStatus.BOARDING, TrainStatus.DEPARTED, TrainStatus.RUNNING, TrainStatus.CANCELLED},
+            TrainStatus.DEPARTED: {TrainStatus.DEPARTED, TrainStatus.RUNNING, TrainStatus.DELAYED, TrainStatus.DIVERTED, TrainStatus.ARRIVED, TrainStatus.CANCELLED},
+            TrainStatus.RUNNING: {TrainStatus.RUNNING, TrainStatus.DELAYED, TrainStatus.DIVERTED, TrainStatus.ARRIVED, TrainStatus.CANCELLED},
+            TrainStatus.DELAYED: {TrainStatus.RUNNING, TrainStatus.DELAYED, TrainStatus.DIVERTED, TrainStatus.ARRIVED, TrainStatus.CANCELLED},
+            TrainStatus.DIVERTED: {TrainStatus.RUNNING, TrainStatus.DELAYED, TrainStatus.DIVERTED, TrainStatus.ARRIVED, TrainStatus.CANCELLED},
+            TrainStatus.ARRIVED: {TrainStatus.ARRIVED, TrainStatus.COMPLETED},
+            TrainStatus.CANCELLED: {TrainStatus.CANCELLED},
+            TrainStatus.COMPLETED: {TrainStatus.COMPLETED},
+        }
+
+        train_existed = event.train_number in self._train_states
+        if train_existed and status != current.status:
+            if status not in allowed.get(current.status, set()):
+                logger.warning(
+                    f"Rejected invalid train status transition from {current.status} to {status} for train {event.train_number}."
+                )
+                status = current.status
+
         updated = TrainState(
             train_number=event.train_number,
             current_station=new_station,
@@ -74,3 +98,4 @@ class TrainTracker:
 
         self._train_states[event.train_number] = updated
         return updated
+
