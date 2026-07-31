@@ -2,10 +2,13 @@
 Passenger Journey Tracker: Manages live passenger travel state and connection monitoring.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional, List
 from app.realtime.interfaces import EventType, JourneyStatus
 from app.realtime.models import OperationalEvent, JourneyState, TrainState
+
+logger = logging.getLogger("ai-service.realtime.journey_tracker")
 
 
 class JourneyTracker:
@@ -78,6 +81,25 @@ class JourneyTracker:
         elif event.event_type == EventType.TRAIN_CANCELLED:
             new_status = JourneyStatus.CANCELLED
 
+        # Enforce state machine transition validation
+        allowed = {
+            JourneyStatus.PLANNED: {JourneyStatus.PLANNED, JourneyStatus.READY, JourneyStatus.BOARDING, JourneyStatus.ONBOARD, JourneyStatus.DISRUPTED, JourneyStatus.CANCELLED},
+            JourneyStatus.READY: {JourneyStatus.READY, JourneyStatus.BOARDING, JourneyStatus.ONBOARD, JourneyStatus.DISRUPTED, JourneyStatus.CANCELLED},
+            JourneyStatus.BOARDING: {JourneyStatus.BOARDING, JourneyStatus.ONBOARD, JourneyStatus.DISRUPTED, JourneyStatus.CANCELLED},
+            JourneyStatus.ONBOARD: {JourneyStatus.ONBOARD, JourneyStatus.TRANSFER, JourneyStatus.COMPLETED, JourneyStatus.DISRUPTED, JourneyStatus.CANCELLED},
+            JourneyStatus.TRANSFER: {JourneyStatus.TRANSFER, JourneyStatus.ONBOARD, JourneyStatus.COMPLETED, JourneyStatus.DISRUPTED, JourneyStatus.CANCELLED},
+            JourneyStatus.DISRUPTED: {JourneyStatus.READY, JourneyStatus.BOARDING, JourneyStatus.ONBOARD, JourneyStatus.TRANSFER, JourneyStatus.COMPLETED, JourneyStatus.CANCELLED},
+            JourneyStatus.CANCELLED: {JourneyStatus.CANCELLED},
+            JourneyStatus.COMPLETED: {JourneyStatus.COMPLETED},
+        }
+
+        if new_status != journey.status:
+            if new_status not in allowed.get(journey.status, set()):
+                logger.warning(
+                    f"Rejected invalid journey status transition from {journey.status} to {new_status} for journey {journey_id}."
+                )
+                new_status = journey.status
+
         updated = JourneyState(
             journey_id=journey.journey_id,
             passenger_id=journey.passenger_id,
@@ -93,3 +115,4 @@ class JourneyTracker:
 
         self._journeys[journey_id] = updated
         return updated
+
