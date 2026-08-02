@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Payment } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
@@ -123,7 +123,7 @@ export class AdminService {
       where: { status: 'completed' },
     });
     const totalRevenue = rawPayments.reduce(
-      (acc: number, curr: Prisma.PaymentGetPayload<object>) =>
+      (acc: number, curr: Payment) =>
         acc + (typeof curr.amount === 'number' ? curr.amount : Number(curr.amount)),
       0,
     );
