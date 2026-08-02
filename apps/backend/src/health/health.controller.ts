@@ -51,9 +51,9 @@ function resolveRedisHostPort(): { host: string; port: number } {
         port: parsed.port ? parseInt(parsed.port, 10) : 6379,
       };
     } catch {
-      // URL constructor can fail on some redis:// URIs – fall back to regex
+      // URL constructor can fail on some redis:// or rediss:// URIs – fall back to regex
       const match = redisUrl.match(
-        /redis:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
+        /rediss?:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
       );
       if (match) {
         return {

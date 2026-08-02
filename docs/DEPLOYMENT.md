@@ -8,11 +8,11 @@ This guide covers the complete deployment workflow for RailYatra across Vercel (
 
 | Service        | Platform       | Runtime         |
 |----------------|----------------|-----------------|
-| Frontend       | Vercel          | Next.js 15      |
-| Backend API    | Railway         | NestJS (Node)   |
-| AI Service     | Railway         | FastAPI (Python) |
-| PostgreSQL     | Railway         | Managed         |
-| Redis          | Railway         | Managed         |
+| Frontend       | Vercel          | Next.js 16      |
+| Backend API    | Render (Web Svc)| NestJS (Node)   |
+| AI Service     | Render (Web Svc)| FastAPI (Python)|
+| PostgreSQL     | Neon (Serverless)| Managed (v15/16)|
+| Redis (Legacy) | Railway [DEPRECATED] | Managed    |
 | Vector DB      | Qdrant Cloud    | Managed         |
 
 ---

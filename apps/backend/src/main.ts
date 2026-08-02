@@ -61,7 +61,7 @@ async function bootstrap() {
       redisPort = parsed.port ? parseInt(parsed.port, 10) : 6379;
     } catch {
       const match = redisUrl.match(
-        /redis:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
+        /rediss?:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
       );
       if (match) {
         redisHost = match[1];

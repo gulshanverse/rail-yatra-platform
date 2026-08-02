@@ -1,143 +1,137 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// User roles represented as strings in the SQLite database:
-// GUEST, USER, PREMIUM, PREMIUM_PLUS, MODERATOR, SUPPORT, ADMIN, SUPER_ADMIN, DEVELOPER, AUDITOR
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  phone         String?        @unique
+  id            String          @id @default(uuid())
+  email         String          @unique
+  phone         String?         @unique
   fullName      String
   passwordHash  String
   avatar        String?
-  role          String         @default("USER")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  role          String          @default("USER")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   deletedAt     DateTime?
-  
-  settings      UserSetting?
-  trips         Trip[]
-  searches      SearchHistory[]
-  savedRoutes   SavedRoute[]
-  pnrHistory    PnrHistory[]
   conversations Conversation[]
+  pnrHistory    PnrHistory[]
+  savedRoutes   SavedRoute[]
+  searches      SearchHistory[]
   subscriptions Subscription[]
+  trips         Trip[]
+  settings      UserSetting?
 }
 
 model UserSetting {
-  id              String   @id @default(uuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  theme           String   @default("auto") // light, dark, auto, high-contrast
-  notifications   Boolean  @default(true)
-  accessibility   Boolean  @default(false)
-  voiceMode       Boolean  @default(false)
-  privacyMode     Boolean  @default(false)
-  aiPreferences   String?  // JSON string (SQLite compatibility)
-  language        String   @default("en")   // en, hi, etc.
-  travelPrefs     String?  // JSON string (SQLite compatibility)
+  id            String  @id @default(uuid())
+  userId        String  @unique
+  theme         String  @default("auto")
+  notifications Boolean @default(true)
+  accessibility Boolean @default(false)
+  voiceMode     Boolean @default(false)
+  privacyMode   Boolean @default(false)
+  aiPreferences String?
+  language      String  @default("en")
+  travelPrefs   String?
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Trip {
-  id           String    @id @default(uuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  source       String
-  destination  String
-  journeyDate  DateTime
-  returnDate   DateTime?
-  passengers   String    // JSON string list of passenger details
-  journeyType  String    @default("direct") // direct, split, etc.
-  budget       Decimal?
-  status       String    @default("scheduled") // scheduled, completed, cancelled
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String    @id @default(uuid())
+  userId      String
+  source      String
+  destination String
+  journeyDate DateTime
+  returnDate  DateTime?
+  passengers  String
+  journeyType String    @default("direct")
+  budget      Decimal?
+  status      String    @default("scheduled")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SearchHistory {
   id          String   @id @default(uuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   query       String?
   source      String
   destination String
-  filters     String?  // JSON string
+  filters     String?
   timestamp   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SavedRoute {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   source      String
   destination String
-  frequency   String?  // daily, weekly, etc.
-  reminder    Boolean  @default(false)
+  frequency   String?
+  reminder    Boolean @default(false)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PnrHistory {
   id           String   @id @default(uuid())
   pnr          String   @unique
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  prediction   String?  // JSON string prediction details, confidence, etc.
+  prediction   String?
   actualStatus String   @default("unknown")
   journeyDate  DateTime
   timestamp    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Conversation {
-  id         String        @id @default(uuid())
-  userId     String
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  summary    String?
-  messages   ChatMessage[]
-  context    String?       // JSON string key-value store for AI session state
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  id        String        @id @default(uuid())
+  userId    String
+  summary   String?
+  context   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ChatMessage {
   id             String       @id @default(uuid())
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String       // user, assistant, system
+  role           String
   content        String
   tokensUsed     Int?
   timestamp      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
-// Subscription tiers represented as strings: FREE, PREMIUM, PREMIUM_PLUS
 model Subscription {
-  id        String           @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tier      String           @default("FREE")
+  tier      String    @default("FREE")
   expiry    DateTime?
-  status    String           @default("active") // active, expired, cancelled
-  credits   Int              @default(3)        // AI journey analysis quota per month
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  status    String    @default("active")
+  credits   Int       @default(3)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Payment {
   id        String   @id @default(uuid())
   orderId   String   @unique
   userId    String
-  gateway   String   // razorpay, stripe, etc.
+  gateway   String
   amount    Decimal
   currency  String   @default("INR")
-  status    String   // completed, failed, pending
+  status    String
   createdAt DateTime @default(now())
 }
 
@@ -149,23 +143,23 @@ model Invoice {
   pdfUrl        String?
   amount        Decimal
   currency      String   @default("INR")
-  status        String   @default("paid") // paid, void, refunded
+  status        String   @default("paid")
   createdAt     DateTime @default(now())
 }
 
 model UsageLog {
   id        String   @id @default(uuid())
   userId    String
-  action    String   // ai_message, journey_analysis, pnr_check, recommendation_request
+  action    String
   timestamp DateTime @default(now())
 }
 
 model BillingEvent {
-  id          String   @id @default(uuid())
-  userId      String
-  eventType   String   // payment_success, payment_failed, subscription_renewed, subscription_cancelled
-  payload     String   // JSON string of event body
-  timestamp   DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  eventType String
+  payload   String
+  timestamp DateTime @default(now())
 }
 
 model Notification {
@@ -173,24 +167,24 @@ model Notification {
   userId    String
   title     String
   message   String
-  category  String   @default("System") // Journey, PNR, AI, Billing, Marketing, System
-  priority  String   @default("medium") // low, medium, high, critical
+  category  String   @default("System")
+  priority  String   @default("medium")
   read      Boolean  @default(false)
-  channel   String   // email, sms, push, whatsapp
+  channel   String
   timestamp DateTime @default(now())
 }
 
 model NotificationPreference {
-  id              String  @id @default(uuid())
-  userId          String  @unique
-  emailAlerts    Boolean @default(true)
-  smsAlerts      Boolean @default(false)
-  pushAlerts     Boolean @default(true)
-  whatsappAlerts Boolean @default(false)
-  quietHoursStart String @default("22:00") // HH:MM format
-  quietHoursEnd   String @default("06:00")
-  marketingAlerts Boolean @default(false)
-  digestPreference String @default("instant") // instant, daily_digest, weekly_digest
+  id               String  @id @default(uuid())
+  userId           String  @unique
+  emailAlerts      Boolean @default(true)
+  smsAlerts        Boolean @default(false)
+  pushAlerts       Boolean @default(true)
+  whatsappAlerts   Boolean @default(false)
+  quietHoursStart  String  @default("22:00")
+  quietHoursEnd    String  @default("06:00")
+  marketingAlerts  Boolean @default(false)
+  digestPreference String  @default("instant")
 }
 
 model ReminderSchedule {
@@ -199,16 +193,16 @@ model ReminderSchedule {
   title        String
   description  String
   triggerTime  DateTime
-  status       String   @default("pending") // pending, sent, failed
-  reminderType String   // journey_preparation, booking_window, subscription_expiry
-  metadata     String?  // JSON string parameters
+  status       String   @default("pending")
+  reminderType String
+  metadata     String?
 }
 
 model UserInsight {
   id        String   @id @default(uuid())
   userId    String
   title     String
-  content   String   // AI-generated personalization travel recommendation summary
+  content   String
   timestamp DateTime @default(now())
 }
 
@@ -216,7 +210,7 @@ model DeliveryLog {
   id        String   @id @default(uuid())
   userId    String
   channel   String
-  status    String   // success, failed
+  status    String
   errorMsg  String?
   timestamp DateTime @default(now())
 }
@@ -232,20 +226,20 @@ model AuditLog {
   id               String   @id @default(uuid())
   actorId          String
   actorEmail       String
-  action           String   // toggle_feature_flag, update_system_config, etc.
+  action           String
   requestId        String?
   ipAddress        String?
   userAgent        String?
   affectedResource String?
-  actionResult     String   @default("success") // success, failed
-  details          String   // JSON string of differences
+  actionResult     String   @default("success")
+  details          String
   timestamp        DateTime @default(now())
 }
 
 model SystemMetric {
   id            String   @id @default(uuid())
-  nodeName      String   // api_server, database, redis, ai_service, background_worker
-  status        String   // healthy, degraded, critical
+  nodeName      String
+  status        String
   cpuPercent    Float    @default(0.0)
   memoryBytes   Decimal  @default(0)
   latencyMs     Int      @default(0)
@@ -256,14 +250,14 @@ model SystemMetric {
 
 model PlatformEvent {
   id        String   @id @default(uuid())
-  type      String   // user_login, subscription_purchase, etc.
-  details   String?  // JSON context
+  type      String
+  details   String?
   timestamp DateTime @default(now())
 }
 
 model AnalyticsSnapshot {
   id               String   @id @default(uuid())
-  date             String   @unique // YYYY-MM-DD
+  date             String   @unique
   activeUsersCount Int      @default(0)
   aiMessagesCount  Int      @default(0)
   analysesCount    Int      @default(0)

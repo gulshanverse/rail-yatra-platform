@@ -65,8 +65,8 @@ export default function Home() {
     }
 
     try {
-      // Connects to FastAPI AI-Service on port 8000
-      const response = await fetch('http://localhost:8000/chat', {
+      const aiServiceUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const response = await fetch(`${aiServiceUrl}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
