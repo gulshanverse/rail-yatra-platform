@@ -8,6 +8,7 @@ import {
   Headers,
   Query,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard, RequirePermission } from './permissions.guard';
 import { AdminService } from './admin.service';
@@ -48,7 +49,7 @@ export class AdminController {
     @Query('search') search?: string,
     @Query('action') action?: string,
   ) {
-    const where: import('@prisma/client').Prisma.AuditLogWhereInput = {};
+    const where: Prisma.AuditLogWhereInput = {};
     if (search) {
       where.OR = [
         { actorEmail: { contains: search } },
