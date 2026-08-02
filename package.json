@@ -4,7 +4,7 @@
   "description": "AI-powered Railway Travel Intelligence Platform",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter \"*\" dev",
+    "dev": "concurrently \"pnpm --filter frontend dev\" \"pnpm --filter backend start:dev\"",
     "build": "pnpm --filter \"*\" build",
     "test": "pnpm --filter \"*\" test",
     "lint": "pnpm --filter \"*\" lint"
