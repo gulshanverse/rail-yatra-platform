@@ -18,6 +18,17 @@ All notable changes to the **RailYatra** platform will be documented in this fil
 
 ---
 
+## [1.0.0] - 2026-08-02
+
+### Added
+- **Phase 7 — Predictive Intelligence Platform**: Congestion, delay, waitlist, seat availability, and risk forecasting engines with explainability and governance.
+- **Phase 8 — Real-Time Operations Platform**: Event-driven railway intelligence engine with train tracking, ETA updates, incident dispatcher, and state transition guards.
+- **Phase 9 — Enterprise Integrations Platform**: Resilient integration gateway with circuit breakers, retry policies, provider registries, and webhooks for weather, maps, payment, and railway APIs.
+- **Phase 10 — Production Platform & Launch Readiness**: Hardened production diagnostics, health/readiness/liveness probes, maintenance recovery, security secrets management, and automated backup/restore scripts.
+- **Milestone 6.6 — AI Response Composer & Explainability Platform**: Pipeline-based response generation with prompt registries, formatters, and confidence scoring evaluators.
+
+---
+
 ## [1.1.0-phase6-m6.5] - 2026-07-22
 
 ### Added
