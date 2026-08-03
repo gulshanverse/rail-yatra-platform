@@ -97,14 +97,11 @@ async def startup_event():
 
         sys.exit(1)
 
-    # 2. Pre-flight Qdrant connection validation (fail-fast in production mode)
+    # 2. Pre-flight Qdrant connection validation (warning mode if unconfigured)
     if os.getenv("ENV") == "production" and not qdrant_rag.enabled:
-        logger.critical(
-            "[FATAL CONNECTION ERROR] Qdrant Cloud connection failed during startup. Process aborting."
+        logger.warning(
+            "[STARTUP WARNING] Qdrant Cloud connection unavailable. Vector search will use local keyword fallback."
         )
-        import sys
-
-        sys.exit(1)
 
     logger.info("Initializing vector search collections in Qdrant...")
     qdrant_rag.initialize_collections()

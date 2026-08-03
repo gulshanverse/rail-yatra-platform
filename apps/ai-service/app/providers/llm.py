@@ -189,13 +189,30 @@ def get_chat_model(
     """
     Factory function returning the correct ChatModel based on provider name.
     If credentials are missing or mock mode is enabled, returns MockChatModel.
+    Environment priority: GOOGLE_API_KEY -> OPENAI_API_KEY -> ANTHROPIC_API_KEY -> Mock
     """
-    prov = provider or settings.DEFAULT_PROVIDER
-    model = model_name or settings.DEFAULT_MODEL
+    if not provider:
+        if settings.GOOGLE_API_KEY:
+            prov = "gemini"
+            model = model_name or "gemini-1.5-flash"
+        elif settings.OPENAI_API_KEY:
+            prov = "openai"
+            model = model_name or settings.DEFAULT_MODEL
+        elif settings.ANTHROPIC_API_KEY:
+            prov = "anthropic"
+            model = model_name or "claude-3-5-sonnet"
+        else:
+            prov = settings.DEFAULT_PROVIDER
+            model = model_name or settings.DEFAULT_MODEL
+    else:
+        prov = provider
+        model = model_name or settings.DEFAULT_MODEL
 
     logger.info(f"Initializing ChatModel for provider: {prov}, model: {model}")
 
-    if settings.ENABLE_MOCK_LLM:
+    if settings.ENABLE_MOCK_LLM and not (
+        settings.GOOGLE_API_KEY or settings.OPENAI_API_KEY or settings.ANTHROPIC_API_KEY
+    ):
         logger.info("Using MockChatModel (Mock Mode explicitly enabled)")
         return MockChatModel(provider_name="mock", model_name="mock")
 
