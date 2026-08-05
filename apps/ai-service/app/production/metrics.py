@@ -94,6 +94,15 @@ class MetricsCollector:
             for name, value in self._gauges.items():
                 lines.append(f"# TYPE {name} gauge")
                 lines.append(f"{name} {value}")
+
+        try:
+            from app.monitoring import ai_metrics_collector
+            ai_text = ai_metrics_collector.prometheus_text()
+            if ai_text.strip():
+                lines.append(ai_text.strip())
+        except Exception:
+            pass
+
         return "\n".join(lines) + "\n"
 
     def reset(self) -> None:

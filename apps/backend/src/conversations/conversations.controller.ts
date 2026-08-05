@@ -154,7 +154,8 @@ export class ConversationsController {
     // 2. Call FastAPI streaming endpoint
     let fastapiResponse: Response;
     try {
-      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      const aiServiceUrl =
+        process.env.AI_SERVICE_URL || 'http://localhost:8000';
       fastapiResponse = await fetch(`${aiServiceUrl}/chat/stream`, {
         method: 'POST',
         headers: {

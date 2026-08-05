@@ -5,12 +5,16 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { SentryService } from '../monitoring/sentry.service';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('ExceptionFilter');
+
+  constructor(@Optional() private readonly sentryService?: SentryService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -34,7 +38,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     }
 
-    const correlationId = request.headers['x-correlation-id'] || 'system';
+    const correlationId =
+      (request.headers['x-correlation-id'] as string) ||
+      (request.headers['traceparent'] as string) ||
+      'system';
 
     let errorName = 'Error';
     let errorMessage = String(exception);
@@ -45,6 +52,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const errObj = exception as Record<string, unknown>;
       if (typeof errObj.name === 'string') errorName = errObj.name;
       if (typeof errObj.message === 'string') errorMessage = errObj.message;
+    }
+
+    if (status >= 500 && this.sentryService) {
+      void this.sentryService.captureException(exception, {
+        path: request.url,
+        method: request.method,
+        status,
+        correlationId,
+      });
     }
 
     // Structured JSON logging
