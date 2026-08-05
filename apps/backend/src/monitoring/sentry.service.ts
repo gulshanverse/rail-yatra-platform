@@ -34,8 +34,8 @@ export class SentryService {
 
     if (this.isEnabled) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
-        const sentry = (eval)('require')('@sentry/node') as SentryModule;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
+        const sentry = eval('require')('@sentry/node') as SentryModule;
         if (sentry && typeof sentry.captureException === 'function') {
           sentry.captureException(exception, { extra: sanitizedContext });
         }
@@ -71,8 +71,8 @@ export class SentryService {
   ) {
     if (this.isEnabled) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
-        const sentry = (eval)('require')('@sentry/node') as SentryModule;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
+        const sentry = eval('require')('@sentry/node') as SentryModule;
         if (sentry && typeof sentry.captureMessage === 'function') {
           sentry.captureMessage(message, level);
         }
