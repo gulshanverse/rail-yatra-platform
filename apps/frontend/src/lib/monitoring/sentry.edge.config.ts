@@ -11,7 +11,6 @@ export function initSentryEdge() {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
     const Sentry = (eval)('require')('@sentry/nextjs');
     if (Sentry && typeof Sentry.init === 'function') {
       Sentry.init({
