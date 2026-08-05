@@ -26,7 +26,7 @@ export class SentryService {
     }
   }
 
-  async captureException(
+  captureException(
     exception: unknown,
     contextData?: Record<string, unknown>,
   ) {
@@ -34,9 +34,11 @@ export class SentryService {
 
     if (this.isEnabled) {
       try {
-        const sentry =
-          (await import('@sentry/node')) as unknown as SentryModule;
-        sentry.captureException(exception, { extra: sanitizedContext });
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
+        const sentry = (eval)('require')('@sentry/node') as SentryModule;
+        if (sentry && typeof sentry.captureException === 'function') {
+          sentry.captureException(exception, { extra: sanitizedContext });
+        }
       } catch {
         // Fallback gracefully if package is not present
       }
@@ -63,15 +65,17 @@ export class SentryService {
     );
   }
 
-  async captureMessage(
+  captureMessage(
     message: string,
     level: 'info' | 'warning' | 'error' = 'info',
   ) {
     if (this.isEnabled) {
       try {
-        const sentry =
-          (await import('@sentry/node')) as unknown as SentryModule;
-        sentry.captureMessage(message, level);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-require-imports
+        const sentry = (eval)('require')('@sentry/node') as SentryModule;
+        if (sentry && typeof sentry.captureMessage === 'function') {
+          sentry.captureMessage(message, level);
+        }
       } catch {
         // Fallback gracefully
       }
