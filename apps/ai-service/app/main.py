@@ -15,7 +15,10 @@ from app.vector.qdrant import qdrant_rag
 from app.data.syncer import railway_background_syncer
 from app.memory.short_term import short_term_memory
 from app.memory.health import router as health_router
+from app.monitoring import init_sentry, MonitoringMiddleware
 
+# Initialize Sentry Error Tracking
+init_sentry()
 
 # JSON Formatter for production logging
 class JsonFormatter(logging.Formatter):
@@ -53,6 +56,9 @@ app = FastAPI(
     description="Microservice responsible for prediction models, recommendation algorithms, and multi-agent systems.",
     version="1.0.0",
 )
+
+# Register Monitoring & Latency Middleware
+app.add_middleware(MonitoringMiddleware)
 
 # Enable CORS
 cors_origins_str = os.getenv("CORS_ORIGIN", "*")

@@ -9,13 +9,16 @@ import { MonetizationModule } from './monetization/monetization.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthModule } from './health/health.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 import { SecurityAndRateLimitMiddleware } from './common/security.middleware';
+import { TraceMiddleware } from './monitoring/trace.middleware';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    MonitoringModule,
     AuthModule,
     ConversationsModule,
     MonetizationModule,
@@ -28,6 +31,8 @@ import { SecurityAndRateLimitMiddleware } from './common/security.middleware';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(SecurityAndRateLimitMiddleware).forRoutes('*');
+    consumer
+      .apply(TraceMiddleware, SecurityAndRateLimitMiddleware)
+      .forRoutes('*');
   }
 }
