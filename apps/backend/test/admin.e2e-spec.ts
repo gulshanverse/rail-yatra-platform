@@ -95,8 +95,8 @@ describe('Admin Module (e2e)', () => {
       where: { actorId: mockAdmin.id, action: 'update_system_config' },
     });
     expect(logEntry).toBeDefined();
-    expect(logEntry.affectedResource).toBe(`Config:${key}`);
-    expect(logEntry.actionResult).toBe('success');
+    expect(logEntry?.affectedResource).toBe(`Config:${key}`);
+    expect(logEntry?.actionResult).toBe('success');
 
     // Clean up
     await prisma.systemConfiguration.delete({ where: { key } }).catch(() => {});
