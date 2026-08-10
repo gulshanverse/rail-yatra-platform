@@ -106,3 +106,21 @@ def get_disaster_recovery_status() -> Dict[str, Any]:
 def get_maintenance_status() -> Dict[str, Any]:
     """GET /production/maintenance - Scheduled background maintenance tasks."""
     return maintenance_scheduler.get_summary()
+
+
+@router.get("/test-gemini")
+async def test_gemini_direct():
+    import os
+    google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not google_key:
+        return {"ok": False, "error": "No GOOGLE_API_KEY found in env"}
+
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.messages import HumanMessage
+        llm = ChatGoogleGenerativeAI(google_api_key=google_key, model="gemini-1.5-flash")
+        res = await llm.ainvoke([HumanMessage(content="Reply with exactly: GEMINI_ONLINE_OK")])
+        return {"ok": True, "reply": str(res.content), "model": "gemini-1.5-flash"}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "type": type(e).__name__}
+
