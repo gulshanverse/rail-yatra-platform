@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, AsyncIterator, Optional
 from langchain_core.messages import SystemMessage, HumanMessage
-from app.providers.llm import get_chat_model
+from app.providers.llm import get_chat_model, _invoke_with_retry, QuotaExhaustedError
 
 logger = logging.getLogger("ai-service.agents.base")
 
@@ -42,7 +42,10 @@ class BaseAgent:
         logger.info(f"Running agent '{self.name}'")
         messages = self._prepare_messages(user_message, context)
         model = get_chat_model()
-        response = await model.ainvoke(messages)
+        # Use retry wrapper to handle transient 429 quota errors
+        response = await _invoke_with_retry(
+            model, messages, provider="gemini", model_name="gemini-2.0-flash"
+        )
         return str(response.content)
 
     async def run_stream(
@@ -54,3 +57,4 @@ class BaseAgent:
         model = get_chat_model()
         async for chunk in model.astream(messages):
             yield str(chunk.content)
+

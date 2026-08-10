@@ -2,6 +2,8 @@ import os
 import logging
 import json
 import time
+import asyncio
+import re
 from typing import List, Optional, Any, Iterator, AsyncIterator
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage, AIMessageChunk
@@ -13,6 +15,64 @@ from langchain_core.callbacks.manager import (
 from app.config.config import settings
 
 logger = logging.getLogger("ai-service.providers")
+
+# Maximum retries for transient 429 errors
+MAX_RETRIES = 3
+BASE_RETRY_DELAY_SECS = 5.0
+
+
+class QuotaExhaustedError(Exception):
+    """Raised when the LLM provider API quota is exhausted after all retries."""
+
+    def __init__(self, provider: str, model: str, retry_after: float = 0):
+        self.provider = provider
+        self.model = model
+        self.retry_after = retry_after
+        super().__init__(
+            f"{provider} quota exhausted for model '{model}'. "
+            f"Free tier daily limit reached. Please retry after {retry_after:.0f}s or upgrade your API plan."
+        )
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """Check if an exception is a 429 RESOURCE_EXHAUSTED quota error."""
+    exc_str = str(exc).upper()
+    return "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "QUOTA" in exc_str
+
+
+def _extract_retry_delay(exc: Exception) -> float:
+    """Extract retry delay from Gemini quota error message, if present."""
+    match = re.search(r"retry in ([\d.]+)s", str(exc), re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return BASE_RETRY_DELAY_SECS
+
+
+async def _invoke_with_retry(model: BaseChatModel, messages: list, provider: str, model_name: str, **kwargs) -> Any:
+    """Invoke a chat model with retry logic for transient 429 errors."""
+    last_exc = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            return await model.ainvoke(messages, **kwargs)
+        except Exception as e:
+            if _is_quota_error(e):
+                retry_delay = _extract_retry_delay(e)
+                backoff = retry_delay * (2 ** (attempt - 1))
+                last_exc = e
+                if attempt < MAX_RETRIES:
+                    logger.warning(
+                        f"[Retry {attempt}/{MAX_RETRIES}] {provider} quota error for '{model_name}'. "
+                        f"Retrying in {backoff:.1f}s..."
+                    )
+                    await asyncio.sleep(backoff)
+                else:
+                    logger.error(
+                        f"[Retry {attempt}/{MAX_RETRIES}] {provider} quota exhausted after all retries for '{model_name}'."
+                    )
+            else:
+                raise  # Non-quota errors should propagate immediately
+
+    raise QuotaExhaustedError(provider, model_name, _extract_retry_delay(last_exc))
 
 
 class MockChatModel(BaseChatModel):
