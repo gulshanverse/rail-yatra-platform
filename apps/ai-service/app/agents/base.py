@@ -15,7 +15,10 @@ class BaseAgent:
     def __init__(self, name: str, system_prompt: str):
         self.name = name
         self.system_prompt = system_prompt
-        self.llm = get_chat_model()
+
+    @property
+    def llm(self):
+        return get_chat_model()
 
     def _prepare_messages(
         self, user_message: str, context: Optional[Dict[str, Any]] = None
@@ -38,7 +41,8 @@ class BaseAgent:
         """Runs the agent synchronously and returns the complete text response."""
         logger.info(f"Running agent '{self.name}'")
         messages = self._prepare_messages(user_message, context)
-        response = await self.llm.ainvoke(messages)
+        model = get_chat_model()
+        response = await model.ainvoke(messages)
         return str(response.content)
 
     async def run_stream(
@@ -47,5 +51,6 @@ class BaseAgent:
         """Runs the agent and streams the response token-by-token."""
         logger.info(f"Streaming agent '{self.name}'")
         messages = self._prepare_messages(user_message, context)
-        async for chunk in self.llm.astream(messages):
+        model = get_chat_model()
+        async for chunk in model.astream(messages):
             yield str(chunk.content)
