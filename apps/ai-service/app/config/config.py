@@ -18,9 +18,9 @@ class Settings(BaseSettings):
 
     # LLM Settings
     DEFAULT_PROVIDER: str = Field(
-        default="openai"
-    )  # openai, anthropic, gemini, openrouter, local
-    DEFAULT_MODEL: str = Field(default="gpt-4o-mini")
+        default="gemini"
+    )  # gemini, openai, anthropic, openrouter, local
+    DEFAULT_MODEL: str = Field(default="gemini-1.5-flash")
 
     # API Keys
     OPENAI_API_KEY: str | None = Field(default=None)
@@ -31,8 +31,12 @@ class Settings(BaseSettings):
         default="http://localhost:11434/v1"
     )  # e.g., Ollama
 
-    # Mock Mode configuration (for local execution without API keys)
-    ENABLE_MOCK_LLM: bool = Field(default=True)
+    # Mock Mode configuration (automatically disabled in production or when API key present)
+    ENABLE_MOCK_LLM: bool = Field(
+        default=os.getenv("ENV") != "production" and not (
+            os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+        )
+    )
 
     # Memory and Cache Settings
     MEMORY_TTL_SECS: int = Field(
