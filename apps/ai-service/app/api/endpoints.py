@@ -37,8 +37,18 @@ async def chat(request: ChatRequest):
     conv_id = request.conversation_id or "default-session"
     user_id = request.user_id or "default-user"
 
-    redis_context = await short_term_memory.get_session_context(conv_id)
-    db_prefs = (await long_term_memory.get_user_preferences(user_id)) or {}
+    redis_context = {}
+    try:
+        redis_context = await short_term_memory.get_session_context(conv_id)
+    except Exception as e:
+        logger.warning(f"Failed to fetch short term memory: {e}")
+
+    db_prefs = {}
+    try:
+        db_prefs = (await long_term_memory.get_user_preferences(user_id)) or {}
+    except Exception as e:
+        logger.warning(f"Failed to fetch user preferences: {e}")
+
     travel_prefs = db_prefs.get("travelPrefs") or {}
 
     combined_context = {
@@ -56,7 +66,10 @@ async def chat(request: ChatRequest):
         context=combined_context,
     )
 
-    await short_term_memory.add_message(conv_id, "assistant", ai_response.response)
+    try:
+        await short_term_memory.add_message(conv_id, "assistant", ai_response.response)
+    except Exception as e:
+        logger.warning(f"Failed to save message to short term memory: {e}")
 
     return {
         "reply": ai_response.response,
@@ -81,8 +94,18 @@ async def chat_stream(request: ChatStreamRequest):
     )
 
     # Load past memory context
-    redis_context = await short_term_memory.get_session_context(request.conversation_id)
-    db_prefs = (await long_term_memory.get_user_preferences(request.user_id)) or {}
+    redis_context = {}
+    try:
+        redis_context = await short_term_memory.get_session_context(request.conversation_id)
+    except Exception as e:
+        logger.warning(f"Failed to fetch short term memory context: {e}")
+
+    db_prefs = {}
+    try:
+        db_prefs = (await long_term_memory.get_user_preferences(request.user_id)) or {}
+    except Exception as e:
+        logger.warning(f"Failed to fetch user preferences: {e}")
+
     travel_prefs = db_prefs.get("travelPrefs") or {}
 
     # Combine context
@@ -115,9 +138,12 @@ async def chat_stream(request: ChatStreamRequest):
                 await asyncio.sleep(0.005)  # Responsive delay simulation
 
             # Keep short-term memory updated with the assistant response
-            await short_term_memory.add_message(
-                request.conversation_id, "assistant", ai_response.response
-            )
+            try:
+                await short_term_memory.add_message(
+                    request.conversation_id, "assistant", ai_response.response
+                )
+            except Exception as ex:
+                logger.warning(f"Error adding message to memory: {ex}")
 
             # 4. Fetch travel choices if the query is travel/pnr related
             options_payload = []
