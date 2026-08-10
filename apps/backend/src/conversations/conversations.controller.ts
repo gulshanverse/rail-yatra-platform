@@ -175,6 +175,21 @@ export class ConversationsController {
       );
     }
 
+    if (!fastapiResponse.ok) {
+      const errorText = await fastapiResponse
+        .text()
+        .catch(() => 'Unknown upstream error');
+      console.error(
+        `AI Service returned error ${fastapiResponse.status}: ${errorText}`,
+      );
+      res.status(fastapiResponse.status).json({
+        statusCode: fastapiResponse.status,
+        message: `AI Service error (${fastapiResponse.status}): ${errorText}`,
+        error: fastapiResponse.status >= 500 ? 'Bad Gateway' : 'Bad Request',
+      });
+      return;
+    }
+
     if (!fastapiResponse.body) {
       throw new InternalServerErrorException('AI stream body not returned');
     }

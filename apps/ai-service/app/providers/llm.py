@@ -273,8 +273,11 @@ def get_chat_model(
             raise ValueError(f"Unknown provider '{prov}'")
 
     except Exception as e:
-        logger.warning(
-            f"Failed to initialize ChatModel for {prov}: {e}. Falling back to MockChatModel."
+        logger.error(
+            f"Failed to initialize ChatModel for provider '{prov}': {e}"
         )
-        return MockChatModel(provider_name="mock-fallback", model_name="mock-fallback")
+        if settings.ENABLE_MOCK_LLM:
+            logger.warning("ENABLE_MOCK_LLM=True: Falling back to MockChatModel")
+            return MockChatModel(provider_name="mock-fallback", model_name="mock-fallback")
+        raise RuntimeError(f"LLM Provider '{prov}' initialization failed: {e}") from e
 
