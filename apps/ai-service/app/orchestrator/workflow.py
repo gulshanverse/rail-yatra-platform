@@ -9,6 +9,7 @@ from app.orchestrator.state import AIState
 from app.orchestrator.graph import get_compiled_graph
 from app.orchestrator.metrics import metrics_collector
 from app.orchestrator.constants import ERR_GRAPH_EXECUTION
+from app.providers.llm import QuotaExhaustedError
 
 logger = logging.getLogger("ai-service.orchestrator.workflow")
 
@@ -78,6 +79,32 @@ class Workflow(IWorkflow):
 
             if errors_list:
                 status = "DEGRADED"
+
+        except QuotaExhaustedError as qe:
+            status = "QUOTA_EXHAUSTED"
+            metrics_collector.increment_failure()
+            logger.warning(
+                f"[{trace_id}] LLM quota exhausted: {qe}",
+            )
+
+            response_text = (
+                "⚠️ **AI Service Quota Temporarily Exceeded**\n\n"
+                f"The {qe.provider} API free tier daily limit has been reached for model `{qe.model}`.\n\n"
+                "Your request was received correctly, but the AI model is temporarily rate-limited. "
+                f"Please try again in **{qe.retry_after:.0f} seconds** or contact the administrator to upgrade the API plan.\n\n"
+                "_This is not a system error — the platform is operating normally._"
+            )
+            agent_key = "quota-handler"
+            intent = "conversation"
+            confidence = 1.0
+            errors_list = [f"quota_exhausted: {qe.provider}/{qe.model}"]
+            latency = (time.time() - state["timestamps"]["workflow_start_time"]) * 1000
+            metadata = {
+                "trace_id": trace_id,
+                "request_id": request_id,
+                "error_code": "QUOTA_EXHAUSTED",
+                "retry_after_secs": qe.retry_after,
+            }
 
         except Exception as e:
             status = "FAILED"

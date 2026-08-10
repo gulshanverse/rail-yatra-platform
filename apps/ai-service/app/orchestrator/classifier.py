@@ -4,7 +4,7 @@ import re
 import time
 from typing import Dict, Any, Optional
 
-from app.providers.llm import get_chat_model
+from app.providers.llm import get_chat_model, _invoke_with_retry
 from app.prompts.classifier import INTENT_CLASSIFIER_PROMPT
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -82,7 +82,9 @@ class IntentClassifier:
         ]
 
         try:
-            response = await self.llm.ainvoke(messages)
+            response = await _invoke_with_retry(
+                self.llm, messages, provider="gemini", model_name="gemini-2.0-flash"
+            )
             content = str(response.content).strip()
 
             # Clean possible markdown code fences from JSON output
