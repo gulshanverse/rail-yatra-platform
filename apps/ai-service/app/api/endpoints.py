@@ -38,16 +38,15 @@ async def chat(request: ChatRequest):
     user_id = request.user_id or "default-user"
 
     redis_context = await short_term_memory.get_session_context(conv_id)
-    db_prefs = await long_term_memory.get_user_preferences(user_id)
+    db_prefs = (await long_term_memory.get_user_preferences(user_id)) or {}
+    travel_prefs = db_prefs.get("travelPrefs") or {}
 
     combined_context = {
         **(request.context or {}),
         **redis_context,
         "user_id": user_id,
-        "preferred_class": db_prefs.get("travelPrefs", {}).get("preferred_class", "3A"),
-        "seat_preference": db_prefs.get("travelPrefs", {}).get(
-            "seat_preference", "lower"
-        ),
+        "preferred_class": travel_prefs.get("preferred_class", "3A"),
+        "seat_preference": travel_prefs.get("seat_preference", "lower"),
     }
 
     ai_response = await workflow_executor.execute(
@@ -83,17 +82,16 @@ async def chat_stream(request: ChatStreamRequest):
 
     # Load past memory context
     redis_context = await short_term_memory.get_session_context(request.conversation_id)
-    db_prefs = await long_term_memory.get_user_preferences(request.user_id)
+    db_prefs = (await long_term_memory.get_user_preferences(request.user_id)) or {}
+    travel_prefs = db_prefs.get("travelPrefs") or {}
 
     # Combine context
     combined_context = {
         **(request.context or {}),
         **redis_context,
         "user_id": request.user_id,
-        "preferred_class": db_prefs.get("travelPrefs", {}).get("preferred_class", "3A"),
-        "seat_preference": db_prefs.get("travelPrefs", {}).get(
-            "seat_preference", "lower"
-        ),
+        "preferred_class": travel_prefs.get("preferred_class", "3A"),
+        "seat_preference": travel_prefs.get("seat_preference", "lower"),
     }
 
     async def event_generator():

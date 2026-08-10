@@ -2,6 +2,8 @@ import logging
 import httpx
 from typing import List, Dict, Any
 
+import os
+
 logger = logging.getLogger("ai-service.memory.long_term")
 
 
@@ -12,8 +14,13 @@ class LongTermMemory:
     if the backend is unreachable.
     """
 
-    def __init__(self, backend_url: str = "http://localhost:5000"):
-        self.backend_url = backend_url
+    def __init__(self, backend_url: str | None = None):
+        self.backend_url = (
+            backend_url
+            or os.getenv("NESTJS_BACKEND_URL")
+            or os.getenv("BACKEND_URL")
+            or "http://localhost:5000"
+        )
 
     async def get_user_preferences(self, user_id: str) -> Dict[str, Any]:
         """Fetches the theme, language, and custom travel preferences of a user."""
