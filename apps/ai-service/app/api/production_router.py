@@ -109,7 +109,7 @@ def get_maintenance_status() -> Dict[str, Any]:
 
 
 @router.get("/test-gemini")
-async def test_gemini_direct():
+async def test_gemini_direct(model: str = "gemini-2.0-flash"):
     import os
     google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not google_key:
@@ -118,9 +118,10 @@ async def test_gemini_direct():
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
         from langchain_core.messages import HumanMessage
-        llm = ChatGoogleGenerativeAI(google_api_key=google_key, model="gemini-1.5-flash")
+        llm = ChatGoogleGenerativeAI(google_api_key=google_key, model=model)
         res = await llm.ainvoke([HumanMessage(content="Reply with exactly: GEMINI_ONLINE_OK")])
-        return {"ok": True, "reply": str(res.content), "model": "gemini-1.5-flash"}
+        return {"ok": True, "reply": str(res.content), "model": model}
     except Exception as e:
-        return {"ok": False, "error": str(e), "type": type(e).__name__}
+        return {"ok": False, "error": str(e), "type": type(e).__name__, "tested_model": model}
+
 

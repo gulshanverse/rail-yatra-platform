@@ -200,7 +200,7 @@ def get_chat_model(
     if not provider:
         if google_key:
             prov = "gemini"
-            model = model_name or "gemini-1.5-flash"
+            model = model_name or "gemini-2.0-flash"
         elif openai_key:
             prov = "openai"
             model = model_name or settings.DEFAULT_MODEL
@@ -227,10 +227,14 @@ def get_chat_model(
         if prov == "gemini":
             if not google_key:
                 raise ValueError("Missing GOOGLE_API_KEY / GEMINI_API_KEY")
+            os.environ["GOOGLE_API_KEY"] = google_key
+            os.environ["GEMINI_API_KEY"] = google_key
             from langchain_google_genai import ChatGoogleGenerativeAI
 
+            gemini_model = model if model and model != "gemini-1.5-flash" else "gemini-2.0-flash"
+
             return ChatGoogleGenerativeAI(
-                google_api_key=google_key, model=model
+                google_api_key=google_key, model=gemini_model
             )
 
         elif prov == "openai":
