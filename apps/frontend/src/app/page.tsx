@@ -59,31 +59,39 @@ export default function Home() {
     setAiLoading(true);
     setAiResponse(null);
 
-    // Asynchronously simulate credit deduction locally
     if (credits > 0) {
       setCredits(prev => prev - 1);
     }
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const aiServiceUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
       const response = await fetch(`${aiServiceUrl}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ message: query }),
       });
 
+      if (!response.ok) {
+        throw new Error(`AI service returned status ${response.status}`);
+      }
+
       const data = await response.json();
       setAiResponse(data);
-    } catch {
-      // Fallback response if AI service is offline
+    } catch (err) {
+      console.error('Error fetching AI decision response:', err);
       setAiResponse({
-        reply: `Offline AI Engine processed request: "${query}"`,
-        parsed_intent: "route_optimization",
-        confidence: 0.88,
-        explanation: "AI Engine analyzed alternative trains. Delay risk is low (under 12%). Confirmation probability for 3A is 82%. Suggest booking from Raipur junction instead of Bilaspur to secure lower berths.",
-        credits_left: credits - 1
+        reply: `Unable to connect to RailYatra AI service. Please verify server endpoints.`,
+        parsed_intent: "system_error",
+        confidence: 0.0,
+        explanation: "AI service connection attempt failed.",
+        credits_left: credits
       });
     } finally {
       setAiLoading(false);

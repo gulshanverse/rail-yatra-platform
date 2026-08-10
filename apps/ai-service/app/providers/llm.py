@@ -1,3 +1,4 @@
+import os
 import logging
 import json
 import time
@@ -189,18 +190,26 @@ def get_chat_model(
     """
     Factory function returning the correct ChatModel based on provider name.
     If credentials are missing or mock mode is enabled, returns MockChatModel.
-    Environment priority: GOOGLE_API_KEY -> OPENAI_API_KEY -> ANTHROPIC_API_KEY -> Mock
+    Environment priority: GOOGLE_API_KEY / GEMINI_API_KEY -> OPENAI_API_KEY -> ANTHROPIC_API_KEY -> Mock
     """
+    google_key = settings.GOOGLE_API_KEY or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    openai_key = settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")
+    anthropic_key = settings.ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY")
+    openrouter_key = settings.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
+
     if not provider:
-        if settings.GOOGLE_API_KEY:
+        if google_key:
             prov = "gemini"
             model = model_name or "gemini-1.5-flash"
-        elif settings.OPENAI_API_KEY:
+        elif openai_key:
             prov = "openai"
             model = model_name or settings.DEFAULT_MODEL
-        elif settings.ANTHROPIC_API_KEY:
+        elif anthropic_key:
             prov = "anthropic"
             model = model_name or "claude-3-5-sonnet"
+        elif openrouter_key:
+            prov = "openrouter"
+            model = model_name or settings.DEFAULT_MODEL
         else:
             prov = settings.DEFAULT_PROVIDER
             model = model_name or settings.DEFAULT_MODEL
@@ -210,45 +219,43 @@ def get_chat_model(
 
     logger.info(f"Initializing ChatModel for provider: {prov}, model: {model}")
 
-    if settings.ENABLE_MOCK_LLM and not (
-        settings.GOOGLE_API_KEY or settings.OPENAI_API_KEY or settings.ANTHROPIC_API_KEY
-    ):
-        logger.info("Using MockChatModel (Mock Mode explicitly enabled)")
+    if settings.ENABLE_MOCK_LLM and not (google_key or openai_key or anthropic_key or openrouter_key):
+        logger.info("Using MockChatModel (Mock Mode enabled & no API keys present)")
         return MockChatModel(provider_name="mock", model_name="mock")
 
     try:
-        if prov == "openai":
-            if not settings.OPENAI_API_KEY:
+        if prov == "gemini":
+            if not google_key:
+                raise ValueError("Missing GOOGLE_API_KEY / GEMINI_API_KEY")
+            from langchain_google_genai import ChatGoogleGenerativeAI
+
+            return ChatGoogleGenerativeAI(
+                google_api_key=google_key, model=model
+            )
+
+        elif prov == "openai":
+            if not openai_key:
                 raise ValueError("Missing OPENAI_API_KEY")
             from langchain_openai import ChatOpenAI
 
-            return ChatOpenAI(openai_api_key=settings.OPENAI_API_KEY, model=model)
+            return ChatOpenAI(openai_api_key=openai_key, model=model)
 
         elif prov == "anthropic":
-            if not settings.ANTHROPIC_API_KEY:
+            if not anthropic_key:
                 raise ValueError("Missing ANTHROPIC_API_KEY")
             from langchain_anthropic import ChatAnthropic
 
             return ChatAnthropic(
-                anthropic_api_key=settings.ANTHROPIC_API_KEY, model=model
-            )
-
-        elif prov == "gemini":
-            if not settings.GOOGLE_API_KEY:
-                raise ValueError("Missing GOOGLE_API_KEY")
-            from langchain_google_genai import ChatGoogleGenerativeAI
-
-            return ChatGoogleGenerativeAI(
-                google_api_key=settings.GOOGLE_API_KEY, model=model
+                anthropic_api_key=anthropic_key, model=model
             )
 
         elif prov == "openrouter":
-            if not settings.OPENROUTER_API_KEY:
+            if not openrouter_key:
                 raise ValueError("Missing OPENROUTER_API_KEY")
             from langchain_openai import ChatOpenAI
 
             return ChatOpenAI(
-                openai_api_key=settings.OPENROUTER_API_KEY,
+                openai_api_key=openrouter_key,
                 model=model,
                 base_url="https://openrouter.ai/api/v1",
             )
@@ -270,3 +277,4 @@ def get_chat_model(
             f"Failed to initialize ChatModel for {prov}: {e}. Falling back to MockChatModel."
         )
         return MockChatModel(provider_name="mock-fallback", model_name="mock-fallback")
+

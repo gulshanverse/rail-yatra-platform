@@ -14,6 +14,13 @@ logger = logging.getLogger("ai-service.api.endpoints")
 router = APIRouter()
 
 
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = "default-session"
+    user_id: Optional[str] = "default-user"
+    context: Optional[Dict[str, Any]] = None
+
+
 class ChatStreamRequest(BaseModel):
     message: str
     conversation_id: str
@@ -21,7 +28,50 @@ class ChatStreamRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
+@router.post("/chat")
+async def chat(request: ChatRequest):
+    """
+    Accepts user chat query, runs LangGraph orchestrator,
+    and returns structured JSON response.
+    """
+    conv_id = request.conversation_id or "default-session"
+    user_id = request.user_id or "default-user"
+
+    redis_context = await short_term_memory.get_session_context(conv_id)
+    db_prefs = await long_term_memory.get_user_preferences(user_id)
+
+    combined_context = {
+        **(request.context or {}),
+        **redis_context,
+        "user_id": user_id,
+        "preferred_class": db_prefs.get("travelPrefs", {}).get("preferred_class", "3A"),
+        "seat_preference": db_prefs.get("travelPrefs", {}).get(
+            "seat_preference", "lower"
+        ),
+    }
+
+    ai_response = await workflow_executor.execute(
+        message=request.message,
+        user_id=user_id,
+        conversation_id=conv_id,
+        context=combined_context,
+    )
+
+    await short_term_memory.add_message(conv_id, "assistant", ai_response.response)
+
+    return {
+        "reply": ai_response.response,
+        "parsed_intent": ai_response.intent,
+        "confidence": ai_response.confidence,
+        "explanation": f"Orchestrated by {ai_response.agent} agent.",
+        "credits_left": 100,
+        "agent": ai_response.agent,
+        "metadata": ai_response.metadata,
+    }
+
+
 @router.post("/chat/stream")
+
 async def chat_stream(request: ChatStreamRequest):
     """
     Accepts user chat query, runs LangGraph orchestrator,

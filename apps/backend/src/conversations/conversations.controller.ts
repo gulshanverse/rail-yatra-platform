@@ -204,9 +204,16 @@ export class ConversationsController {
               const data = JSON.parse(line.substring(6)) as {
                 type?: string;
                 value?: string;
+                reply?: string;
               };
               if (data.type === 'token' && typeof data.value === 'string') {
                 assistantReply += data.value;
+              } else if (
+                data.type === 'done' &&
+                typeof data.reply === 'string' &&
+                !assistantReply.trim()
+              ) {
+                assistantReply = data.reply;
               }
             } catch {
               // Ignore partial JSON parsing failures
