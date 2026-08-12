@@ -71,7 +71,9 @@ export default function Home() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const aiServiceUrl = process.env.NEXT_PUBLIC_AI_SERVICE_URL || 'http://localhost:8000';
+      const aiServiceUrl =
+        process.env.NEXT_PUBLIC_AI_SERVICE_URL ||
+        'https://railyatra-ai-service.onrender.com';
       const response = await fetch(`${aiServiceUrl}/chat`, {
         method: 'POST',
         headers,
