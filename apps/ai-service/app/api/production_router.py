@@ -109,7 +109,7 @@ def get_maintenance_status() -> Dict[str, Any]:
 
 
 @router.get("/test-gemini")
-async def test_gemini_direct(model: str = "gemini-2.0-flash"):
+async def test_gemini_direct(model: str = "gemini-3.5-flash"):
     import os
     google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not google_key:

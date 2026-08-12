@@ -44,7 +44,7 @@ class BaseAgent:
         model = get_chat_model()
         # Use retry wrapper to handle transient 429 quota errors
         response = await _invoke_with_retry(
-            model, messages, provider="gemini", model_name="gemini-2.0-flash"
+            model, messages, provider="gemini", model_name="gemini-3.5-flash"
         )
         return str(response.content)
 

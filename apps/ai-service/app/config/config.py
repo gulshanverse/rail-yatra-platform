@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DEFAULT_PROVIDER: str = Field(
         default="gemini"
     )  # gemini, openai, anthropic, openrouter, local
-    DEFAULT_MODEL: str = Field(default="gemini-2.0-flash")
+    DEFAULT_MODEL: str = Field(default="gemini-3.5-flash")
 
     # API Keys
     OPENAI_API_KEY: str | None = Field(default=None)
