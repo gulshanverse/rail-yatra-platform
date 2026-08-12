@@ -34,7 +34,10 @@ export default function Register() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error?.message || 'Registration failed.');
+        const errMsg = Array.isArray(result.message)
+          ? result.message.join(', ')
+          : result.message || result.error?.message || 'Registration failed.';
+        throw new Error(errMsg);
       }
 
       setSuccess(true);

@@ -1,12 +1,34 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Server } from 'http';
 import { Socket } from 'net';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { PrismaService } from './prisma.service';
+
+// Load .env manually if process.env is missing key variables
+const envPath = path.resolve(process.cwd(), '.env');
+if (fs.existsSync(envPath)) {
+  const envConfig = fs.readFileSync(envPath, 'utf8');
+  for (const line of envConfig.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+      const idx = trimmed.indexOf('=');
+      const key = trimmed.substring(0, idx).trim();
+      let val = trimmed.substring(idx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.substring(1, val.length - 1);
+      }
+      if (!process.env[key]) {
+        process.env[key] = val;
+      }
+    }
+  }
+}
 
 function checkTcpConnection(
   host: string,
@@ -75,10 +97,18 @@ async function bootstrap() {
   logger.log(`Validating Redis connectivity to ${redisHost}:${redisPort}...`);
   const isRedisUp = await checkTcpConnection(redisHost, redisPort);
   if (!isRedisUp) {
-    logger.error(
-      `[FATAL CONNECTION ERROR] Cannot connect to Redis at ${redisHost}:${redisPort}. Startup aborted.`,
-    );
-    process.exit(1);
+    if (process.env.NODE_ENV === 'production') {
+      logger.error(
+        `[FATAL CONNECTION ERROR] Cannot connect to Redis at ${redisHost}:${redisPort}. Startup aborted.`,
+      );
+      process.exit(1);
+    } else {
+      logger.warn(
+        `[WARNING] Cannot connect to Redis at ${redisHost}:${redisPort}. Continuing in development mode.`,
+      );
+    }
+  } else {
+    logger.log('Redis connectivity verified successfully.');
   }
   logger.log('Redis connectivity verified successfully.');
 
@@ -87,12 +117,31 @@ async function bootstrap() {
   // Enable shutdown hooks for NestJS lifecycle mapping
   app.enableShutdownHooks();
 
-  // Enable CORS
-  const corsOrigin = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',')
-    : '*';
+  // Enable CORS with proper credential-compatible origin reflection
+  const configuredOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+    : ['*'];
+
   app.enableCors({
-    origin: corsOrigin,
+    origin: (
+      requestOrigin: string | undefined,
+      callback: (err: Error | null, origin?: boolean | string) => void,
+    ) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, same-origin)
+      if (!requestOrigin) {
+        return callback(null, true);
+      }
+      // If configured for wildcard or contains requested origin, reflect the requesting origin
+      if (
+        configuredOrigins.includes('*') ||
+        configuredOrigins.includes(requestOrigin) ||
+        requestOrigin.endsWith('.vercel.app') ||
+        requestOrigin.endsWith('.onrender.com')
+      ) {
+        return callback(null, requestOrigin);
+      }
+      return callback(null, false);
+    },
     optionsSuccessStatus: 204,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,

@@ -34,7 +34,10 @@ export default function Login() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error?.message || 'Login failed.');
+        const errMsg = Array.isArray(result.message)
+          ? result.message.join(', ')
+          : result.message || result.error?.message || 'Login failed.';
+        throw new Error(errMsg);
       }
 
       setAuth(result.data.accessToken, result.data.user);
