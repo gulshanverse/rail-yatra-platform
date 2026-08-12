@@ -83,7 +83,7 @@ class IntentClassifier:
 
         try:
             response = await _invoke_with_retry(
-                self.llm, messages, provider="gemini", model_name="gemini-2.0-flash"
+                self.llm, messages, provider="gemini", model_name="gemini-3.5-flash"
             )
             content = str(response.content).strip()
 
