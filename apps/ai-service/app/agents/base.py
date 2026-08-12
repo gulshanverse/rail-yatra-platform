@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, AsyncIterator, Optional
 from langchain_core.messages import SystemMessage, HumanMessage
-from app.providers.llm import get_chat_model, _invoke_with_retry, QuotaExhaustedError
+from app.providers.llm import get_chat_model, _invoke_with_retry
 
 logger = logging.getLogger("ai-service.agents.base")
 
