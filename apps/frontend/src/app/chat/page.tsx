@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import { API_BASE_URL } from '../../lib/api';
+import { parseSSEBuffer } from '../../lib/sse';
 import { 
   Sparkles, 
   Send, 
@@ -164,43 +165,68 @@ export default function AIWorkspace() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      let buffer = '';
       let accumulated = '';
+
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
+      const updateAssistantMessage = (content: string) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          const index = updated.length - 1;
+          if (index >= 0 && updated[index].role === 'assistant') {
+            updated[index] = { ...updated[index], content };
+          }
+          return updated;
+        });
+      };
+
+      const processEvent = (rawData: string) => {
+        try {
+          const data = JSON.parse(rawData) as {
+            type?: string;
+            value?: string;
+            reply?: string;
+            options?: TravelOption[];
+            message?: string;
+          };
+
+          if (data.type === 'token' && typeof data.value === 'string') {
+            accumulated += data.value;
+            updateAssistantMessage(accumulated);
+          } else if (data.type === 'done') {
+            if (typeof data.reply === 'string' && data.reply !== accumulated) {
+              accumulated = data.reply;
+              updateAssistantMessage(accumulated);
+            }
+            if (Array.isArray(data.options) && data.options.length > 0) {
+              setOptions(data.options);
+              setActiveOptionIndex(0);
+            }
+          } else if (data.type === 'error') {
+            throw new Error(data.message || 'AI stream failed');
+          }
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            console.warn('Ignoring malformed SSE payload');
+          } else {
+            throw error;
+          }
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.substring(6));
-              if (data.type === 'token') {
-                accumulated += data.value;
-                setMessages(prev => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: 'assistant',
-                    content: accumulated
-                  };
-                  return updated;
-                });
-              } else if (data.type === 'done') {
-                if (data.options && data.options.length > 0) {
-                  setOptions(data.options);
-                  setActiveOptionIndex(0); // auto select first option
-                }
-              }
-            } catch {
-              // Ignore boundary parsing issues
-            }
-          }
-        }
+        buffer += decoder.decode(value, { stream: true });
+        const [events, remainder] = parseSSEBuffer(buffer);
+        buffer = remainder;
+        for (const event of events) processEvent(event.data);
       }
+
+      buffer += decoder.decode();
+      const [finalEvents] = parseSSEBuffer(buffer);
+      for (const event of finalEvents) processEvent(event.data);
     } catch (err) {
       console.error(err);
       setMessages(prev => [
@@ -398,104 +424,130 @@ export default function AIWorkspace() {
   // Active option references
   const activeOption = activeOptionIndex !== null && sortedOptions[activeOptionIndex] ? sortedOptions[activeOptionIndex] : null;
 
-  // Simple clean helper to render markdown
   const renderMarkdown = (rawText: string) => {
     if (!rawText) return null;
     let text = rawText.trim();
 
-    // Defense-in-depth: Normalize Python repr / JSON structures if present
-    if (
-      (text.startsWith('[') && text.endsWith(']')) ||
-      (text.startsWith('{') && text.endsWith('}'))
-    ) {
+    if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('{') && text.endsWith('}'))) {
       try {
-        const jsonish = text
-          .replace(/'/g, '"')
-          .replace(/None/g, 'null')
-          .replace(/True/g, 'true')
-          .replace(/False/g, 'false');
-        const parsed = JSON.parse(jsonish);
+        const jsonish = text.replace(/'/g, '"').replace(/None/g, 'null').replace(/True/g, 'true').replace(/False/g, 'false');
+        const parsed = JSON.parse(jsonish) as unknown;
         if (Array.isArray(parsed)) {
-          const parts = parsed
-            .map((item) =>
-              typeof item === 'object' && item !== null
-                ? item.text || item.reply || item.content || ''
-                : String(item)
-            )
-            .filter(Boolean);
-          if (parts.length > 0) text = parts.join('\n\n');
+          const parts = parsed.map((item: unknown) => {
+            if (typeof item === 'object' && item !== null) {
+              const record = item as Record<string, unknown>;
+              const value = record.text ?? record.reply ?? record.content ?? '';
+              return typeof value === 'string' ? value : '';
+            }
+            return typeof item === 'string' ? item : '';
+          }).filter(Boolean);
+          if (parts.length) text = parts.join('\n\n');
         } else if (typeof parsed === 'object' && parsed !== null) {
-          const pObj = parsed as Record<string, unknown>;
-          if (typeof pObj.text === 'string') text = pObj.text;
-          else if (typeof pObj.reply === 'string') text = pObj.reply;
-          else if (typeof pObj.content === 'string') text = pObj.content;
+          const record = parsed as Record<string, unknown>;
+          const value = record.text ?? record.reply ?? record.content;
+          if (typeof value === 'string') text = value;
         }
       } catch {
-        const textMatch =
-          /'text':\s*'([\s\S]+?)'(?:,\s*'extras'|,\s*'signature'|\})/g.exec(text);
-        if (textMatch && textMatch[1]) {
-          text = textMatch[1].replace(/\\n/g, '\n').replace(/\\'/g, "'");
-        }
+        const match = /'text':\s*'([\s\S]+?)'(?:,\s*'extras'|,\s*'signature'|\})/.exec(text);
+        if (match?.[1]) text = match[1].replace(/\\n/g, '\n').replace(/\\'/g, "'");
       }
     }
 
-    if (text.includes('|') && text.includes('\n')) {
-      const lines = text.split('\n');
-      const tableLines = lines.filter(line => line.trim().startsWith('|'));
-      if (tableLines.length >= 2) {
-        const headers = tableLines[0].split('|').map(h => h.trim()).filter(Boolean);
-        const rows = tableLines.slice(2).map(r => r.split('|').map(col => col.trim()).filter(Boolean));
-        return (
-          <div className="overflow-x-auto my-3 border border-border rounded-xl">
-            <table className="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr className="bg-muted border-b border-border">
-                  {headers.map((h, i) => (
-                    <th key={i} className="p-3.5 font-bold text-foreground/80">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, ri) => (
-                  <tr key={ri} className="border-b border-border hover:bg-muted/20">
-                    {row.map((col, ci) => (
-                      <td key={ci} className="p-3.5 text-foreground font-medium">{col}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
+    const renderInline = (value: string): React.ReactNode[] => {
+      const nodes: React.ReactNode[] = [];
+      const pattern = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\[[^\]]+\]\([^\)]+\)|\*[^*\n]+\*|_[^_\n]+_)/g;
+      let last = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(value))) {
+        if (match.index > last) nodes.push(value.slice(last, match.index));
+        const token = match[0];
+        if (token.startsWith('**') || token.startsWith('__')) {
+          nodes.push(<strong key={`${match.index}-b`}>{token.slice(2, -2)}</strong>);
+        } else if (token.startsWith('`')) {
+          nodes.push(<code key={`${match.index}-c`} className="rounded bg-background/70 border border-border px-1.5 py-0.5 text-[0.9em] font-mono">{token.slice(1, -1)}</code>);
+        } else if (token.startsWith('[')) {
+          const link = /^\[([^\]]+)\]\(([^\)]+)\)$/.exec(token);
+          nodes.push(link ? <a key={`${match.index}-a`} href={link[2]} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2 hover:opacity-80">{link[1]}</a> : token);
+        } else {
+          nodes.push(<em key={`${match.index}-i`}>{token.slice(1, -1)}</em>);
+        }
+        last = match.index + token.length;
       }
-    }
+      if (last < value.length) nodes.push(value.slice(last));
+      return nodes;
+    };
 
     const lines = text.split('\n');
-    return (
-      <div className="space-y-2">
-        {lines.map((line, index) => {
-          if (line.startsWith('> [!TIP]')) return null;
-          if (line.startsWith('> [!NOTE]')) return null;
-          if (line.startsWith('> ')) {
-            return (
-              <blockquote key={index} className="pl-4 border-l-4 border-primary/50 text-xs italic text-muted-foreground my-2 py-1 bg-primary/5 rounded-r">
-                {line.substring(2)}
-              </blockquote>
-            );
-          }
-          if (line.startsWith('### ')) {
-            return <h4 key={index} className="text-sm font-bold text-foreground mt-3 mb-1">{line.substring(4)}</h4>;
-          }
-          if (line.startsWith('## ')) {
-            return <h3 key={index} className="text-base font-bold text-foreground mt-4 mb-2">{line.substring(3)}</h3>;
-          }
-          if (line.startsWith('- ') || line.startsWith('* ')) {
-            return <li key={index} className="list-disc ml-5 text-sm">{line.substring(2)}</li>;
-          }
-          return <p key={index} className="text-sm leading-relaxed">{line}</p>;
-        })}
-      </div>
-    );
+    const blocks: React.ReactNode[] = [];
+    let index = 0;
+
+    while (index < lines.length) {
+      const line = lines[index];
+      if (!line.trim()) { index += 1; continue; }
+
+      if (line.trim().startsWith('```')) {
+        const language = line.trim().slice(3).trim();
+        const code: string[] = [];
+        index += 1;
+        while (index < lines.length && !lines[index].trim().startsWith('```')) {
+          code.push(lines[index]);
+          index += 1;
+        }
+        index += 1;
+        blocks.push(<pre key={`code-${index}`} className="my-3 overflow-x-auto rounded-xl border border-border bg-background p-3 text-xs leading-relaxed"><code className="font-mono">{language ? `${language}\n` : ''}{code.join('\n')}</code></pre>);
+        continue;
+      }
+
+      if (line.trim().startsWith('|')) {
+        const table: string[] = [];
+        while (index < lines.length && lines[index].trim().startsWith('|')) { table.push(lines[index]); index += 1; }
+        if (table.length >= 2) {
+          const parseRow = (row: string) => row.split('|').slice(1, -1).map(cell => cell.trim());
+          const headers = parseRow(table[0]);
+          const body = table.slice(1).filter(row => !/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?$/.test(row.trim())).map(parseRow);
+          blocks.push(<div key={`table-${index}`} className="my-3 overflow-x-auto rounded-xl border border-border"><table className="w-full text-left text-xs"><thead><tr className="border-b border-border bg-background/60">{headers.map((cell, i) => <th key={i} className="p-3 font-bold">{renderInline(cell)}</th>)}</tr></thead><tbody>{body.map((row, ri) => <tr key={ri} className="border-b border-border last:border-0">{headers.map((_, ci) => <td key={ci} className="p-3 align-top">{renderInline(row[ci] ?? '')}</td>)}</tr>)}</tbody></table></div>);
+          continue;
+        }
+      }
+
+      const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+      if (heading) {
+        const size = heading[1].length === 1 ? 'text-lg' : heading[1].length === 2 ? 'text-base' : 'text-sm';
+        blocks.push(<h3 key={`h-${index}`} className={`${size} mt-3 font-bold text-foreground`}>{renderInline(heading[2])}</h3>);
+        index += 1;
+        continue;
+      }
+
+      if (/^>\s?/.test(line)) {
+        const quote: string[] = [];
+        while (index < lines.length && /^>\s?/.test(lines[index])) { quote.push(lines[index].replace(/^>\s?/, '')); index += 1; }
+        blocks.push(<blockquote key={`q-${index}`} className="my-2 border-l-4 border-primary/40 bg-primary/5 px-4 py-2 text-sm italic text-muted-foreground">{quote.map((q, i) => <div key={i}>{renderInline(q)}</div>)}</blockquote>);
+        continue;
+      }
+
+      if (/^\s*[-*]\s+/.test(line)) {
+        const items: string[] = [];
+        while (index < lines.length && /^\s*[-*]\s+/.test(lines[index])) { items.push(lines[index].replace(/^\s*[-*]\s+/, '')); index += 1; }
+        blocks.push(<ul key={`ul-${index}`} className="my-2 list-disc space-y-1 pl-5 text-sm">{items.map((item, i) => <li key={i}>{renderInline(item)}</li>)}</ul>);
+        continue;
+      }
+
+      if (/^\s*\d+\.\s+/.test(line)) {
+        const items: string[] = [];
+        while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) { items.push(lines[index].replace(/^\s*\d+\.\s+/, '')); index += 1; }
+        blocks.push(<ol key={`ol-${index}`} className="my-2 list-decimal space-y-1 pl-5 text-sm">{items.map((item, i) => <li key={i}>{renderInline(item)}</li>)}</ol>);
+        continue;
+      }
+
+      if (/^\s*---+\s*$/.test(line)) { blocks.push(<hr key={`hr-${index}`} className="my-3 border-border" />); index += 1; continue; }
+
+      const paragraph: string[] = [line];
+      index += 1;
+      while (index < lines.length && lines[index].trim() && !/^(#{1,3})\s+/.test(lines[index]) && !/^\s*[-*]\s+/.test(lines[index]) && !/^\s*\d+\.\s+/.test(lines[index]) && !/^>\s?/.test(lines[index]) && !lines[index].trim().startsWith('```') && !lines[index].trim().startsWith('|')) { paragraph.push(lines[index]); index += 1; }
+      blocks.push(<p key={`p-${index}`} className="text-sm leading-7">{renderInline(paragraph.join(' '))}</p>);
+    }
+
+    return <div className="space-y-1">{blocks}</div>;
   };
 
   const filteredConversations = conversations.filter(c => 

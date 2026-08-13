@@ -17,6 +17,7 @@ import * as express from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma.service';
 import type { AuthenticatedRequest } from '../common/interfaces';
+import { parseSSEBuffer } from '../common/sse';
 
 @Controller('api/conversations')
 @UseGuards(JwtAuthGuard)
@@ -28,12 +29,7 @@ export class ConversationsController {
     return this.prisma.conversation.findMany({
       where: { userId: req.user.id },
       orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        summary: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: { id: true, summary: true, createdAt: true, updatedAt: true },
     });
   }
 
@@ -43,10 +39,7 @@ export class ConversationsController {
     @Body() body: { summary?: string },
   ) {
     return this.prisma.conversation.create({
-      data: {
-        userId: req.user.id,
-        summary: body.summary || 'New Chat',
-      },
+      data: { userId: req.user.id, summary: body.summary || 'New Chat' },
     });
   }
 
@@ -57,21 +50,13 @@ export class ConversationsController {
   ) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
-      include: {
-        messages: {
-          orderBy: { timestamp: 'asc' },
-        },
-      },
+      include: { messages: { orderBy: { timestamp: 'asc' } } },
     });
 
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
-
+    if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== req.user.id) {
       throw new UnauthorizedException('Access denied for this conversation');
     }
-
     return conversation;
   }
 
@@ -81,18 +66,11 @@ export class ConversationsController {
     @Req() req: AuthenticatedRequest,
     @Body() body: { summary: string },
   ) {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id },
-    });
-
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
-
+    const conversation = await this.prisma.conversation.findUnique({ where: { id } });
+    if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== req.user.id) {
       throw new UnauthorizedException('Access denied for this conversation');
     }
-
     return this.prisma.conversation.update({
       where: { id },
       data: { summary: body.summary },
@@ -104,22 +82,12 @@ export class ConversationsController {
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id },
-    });
-
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
-
+    const conversation = await this.prisma.conversation.findUnique({ where: { id } });
+    if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== req.user.id) {
       throw new UnauthorizedException('Access denied for this conversation');
     }
-
-    await this.prisma.conversation.delete({
-      where: { id },
-    });
-
+    await this.prisma.conversation.delete({ where: { id } });
     return { success: true, message: 'Conversation deleted successfully.' };
   }
 
@@ -130,37 +98,28 @@ export class ConversationsController {
     @Body() body: { message: string; context?: Record<string, unknown> },
     @Res() res: express.Response,
   ) {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id },
-    });
-
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
-
+    const conversation = await this.prisma.conversation.findUnique({ where: { id } });
+    if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== req.user.id) {
       throw new UnauthorizedException('Access denied for this conversation');
     }
 
-    // 1. Save user message to database
     await this.prisma.chatMessage.create({
-      data: {
-        conversationId: id,
-        role: 'user',
-        content: body.message,
-      },
+      data: { conversationId: id, role: 'user', content: body.message },
     });
 
-    // 2. Call FastAPI streaming endpoint
+    const aiServiceUrl = process.env.AI_SERVICE_URL?.trim();
+    if (!aiServiceUrl) {
+      throw new InternalServerErrorException(
+        'AI Core service is not configured. Set AI_SERVICE_URL on the backend deployment.',
+      );
+    }
+
     let fastapiResponse: Response;
     try {
-      const aiServiceUrl =
-        process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      fastapiResponse = await fetch(`${aiServiceUrl}/chat/stream`, {
+      fastapiResponse = await fetch(`${aiServiceUrl.replace(/\/$/, '')}/chat/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: body.message,
           conversation_id: id,
@@ -176,12 +135,8 @@ export class ConversationsController {
     }
 
     if (!fastapiResponse.ok) {
-      const errorText = await fastapiResponse
-        .text()
-        .catch(() => 'Unknown upstream error');
-      console.error(
-        `AI Service returned error ${fastapiResponse.status}: ${errorText}`,
-      );
+      const errorText = await fastapiResponse.text().catch(() => 'Unknown upstream error');
+      console.error(`AI Service returned error ${fastapiResponse.status}: ${errorText}`);
       res.status(fastapiResponse.status).json({
         statusCode: fastapiResponse.status,
         message: `AI Service error (${fastapiResponse.status}): ${errorText}`,
@@ -194,69 +149,75 @@ export class ConversationsController {
       throw new InternalServerErrorException('AI stream body not returned');
     }
 
-    // 3. Set headers for SSE stream proxying
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
 
     const reader = fastapiResponse.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
     let assistantReply = '';
+    let streamClosed = false;
+
+    const closeOnDisconnect = () => {
+      if (!streamClosed) {
+        streamClosed = true;
+        void reader.cancel().catch(() => undefined);
+      }
+    };
+    res.once('close', closeOnDisconnect);
 
     try {
-      while (true) {
+      while (!streamClosed) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        res.write(chunk);
+        buffer += decoder.decode(value, { stream: true });
+        const [events, remainder] = parseSSEBuffer(buffer);
+        buffer = remainder;
 
-        // Extract assistant reply from data chunks
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.substring(6)) as {
-                type?: string;
-                value?: string;
-                reply?: string;
-              };
-              if (data.type === 'token' && typeof data.value === 'string') {
-                assistantReply += data.value;
-              } else if (
-                data.type === 'done' &&
-                typeof data.reply === 'string' &&
-                !assistantReply.trim()
-              ) {
-                assistantReply = data.reply;
-              }
-            } catch {
-              // Ignore partial JSON parsing failures
+        for (const sseEvent of events) {
+          res.write(`data: ${sseEvent.data}\n\n`);
+
+          try {
+            const data = JSON.parse(sseEvent.data) as {
+              type?: string;
+              value?: string;
+              reply?: string;
+            };
+            if (data.type === 'token' && typeof data.value === 'string') {
+              assistantReply += data.value;
+            } else if (
+              data.type === 'done' &&
+              typeof data.reply === 'string' &&
+              !assistantReply.trim()
+            ) {
+              assistantReply = data.reply;
             }
+          } catch {
+            console.warn('Ignoring malformed upstream SSE event');
           }
         }
       }
+
+      buffer += decoder.decode();
     } catch (streamError) {
-      console.error('Error during streaming read:', streamError);
+      if (!streamClosed) console.error('Error during streaming read:', streamError);
+    } finally {
+      res.off('close', closeOnDisconnect);
     }
 
-    // 4. Save final full assistant response to the SQLite database
-    if (assistantReply.trim()) {
+    if (!streamClosed && assistantReply.trim()) {
       await this.prisma.chatMessage.create({
-        data: {
-          conversationId: id,
-          role: 'assistant',
-          content: assistantReply,
-        },
+        data: { conversationId: id, role: 'assistant', content: assistantReply },
       });
-
-      // Update updatedAt timestamp of the conversation
       await this.prisma.conversation.update({
         where: { id },
         data: { updatedAt: new Date() },
       });
     }
 
-    res.end();
+    if (!res.writableEnded) res.end();
   }
 }

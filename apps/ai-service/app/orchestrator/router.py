@@ -5,6 +5,7 @@ from app.orchestrator.constants import (
     INTENT_PREDICTION,
     INTENT_PNR,
     INTENT_KNOWLEDGE,
+    INTENT_RECOMMENDATION,
     AGENT_TRAVEL_PLANNING,
     AGENT_PREDICTION,
     AGENT_PNR,
@@ -30,16 +31,22 @@ class Router(IRouter):
 
         if intent_lower == INTENT_TRAVEL_PLANNING:
             return AGENT_TRAVEL_PLANNING
-        elif intent_lower in [INTENT_PREDICTION, "prediction"]:
+        if intent_lower in {INTENT_PREDICTION, "prediction", "journey_intelligence"}:
             return AGENT_PREDICTION
-        elif intent_lower in [INTENT_PNR, "pnr"]:
+        if intent_lower in {INTENT_PNR, "pnr"}:
             return AGENT_PNR
-        elif intent_lower == INTENT_KNOWLEDGE:
+        if intent_lower == INTENT_KNOWLEDGE:
             return AGENT_KNOWLEDGE
-        else:
-            # Everything else (e.g. recommendation, chit-chat, unknown intents)
-            # maps to the conversation agent.
+        if intent_lower == INTENT_RECOMMENDATION:
+            # Recommendations are travel decisions, not casual conversation.
+            # Route them to the travel specialist so train/class/cost comparisons
+            # receive domain-aware handling and structured travel data when available.
+            return AGENT_TRAVEL_PLANNING
+        if intent_lower == "conversation":
             return AGENT_CONVERSATION
+
+        logger.warning("Unknown intent '%s'. Defaulting to conversation agent.", intent)
+        return AGENT_CONVERSATION
 
 
 router = Router()

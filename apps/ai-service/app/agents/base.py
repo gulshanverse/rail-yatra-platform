@@ -1,51 +1,53 @@
 import logging
-from typing import Dict, Any, AsyncIterator, Optional
-from langchain_core.messages import SystemMessage, HumanMessage
-from app.providers.llm import get_chat_model, _invoke_with_retry
+from typing import Any, AsyncIterator, Dict, Optional
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from app.providers.llm import _invoke_with_retry, get_chat_model
 
 logger = logging.getLogger("ai-service.agents.base")
 
 
 def extract_text_content(content: Any) -> str:
-    """
-    Normalizes LangChain AIMessage.content into a plain text string.
+    """Return only human-readable assistant text from provider/LangChain content.
 
-    Gemini models via LangChain may return content as:
-    - A plain string: "Hello, I can help you..."
-    - A list of structured content blocks:
-      [{"type": "text", "text": "Hello...", "extras": {"signature": "..."}}]
-
-    This function extracts only the human-readable text and discards
-    provider metadata (extras, signatures, execution paths).
+    Gemini responses can be strings, structured text blocks, dictionaries, or
+    empty values. Provider metadata such as signatures and extras must never
+    reach the chat UI.
     """
+    if content is None:
+        return ""
+
     if isinstance(content, str):
-        return content
+        return content.strip()
+
+    if isinstance(content, dict):
+        for key in ("text", "content", "reply", "message"):
+            value = content.get(key)
+            if isinstance(value, str):
+                return value.strip()
+        return ""
 
     if isinstance(content, list):
-        text_parts = []
+        text_parts: list[str] = []
         for block in content:
+            if isinstance(block, str):
+                if block.strip():
+                    text_parts.append(block.strip())
+                continue
             if isinstance(block, dict):
-                # Extract text from {"type": "text", "text": "..."} blocks
-                if block.get("type") == "text" and "text" in block:
-                    text_parts.append(block["text"])
-                elif "text" in block:
-                    text_parts.append(block["text"])
-                elif "content" in block:
-                    text_parts.append(str(block["content"]))
-            elif isinstance(block, str):
-                text_parts.append(block)
-        if text_parts:
-            return "\n\n".join(text_parts)
+                value = block.get("text")
+                if not isinstance(value, str):
+                    value = block.get("content")
+                if isinstance(value, str) and value.strip():
+                    text_parts.append(value.strip())
+        return "\n\n".join(text_parts)
 
-    # Final fallback: convert to string but should rarely be reached
-    return str(content)
+    return str(content).strip()
 
 
 class BaseAgent:
-    """
-    Base Agent class that initializes the LLM provider and defines
-    standard execution interfaces for specialized travel sub-agents.
-    """
+    """Base agent with shared LLM setup and response normalization."""
 
     def __init__(self, name: str, system_prompt: str):
         self.name = name
@@ -58,12 +60,11 @@ class BaseAgent:
     def _prepare_messages(
         self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> list:
-        # Formulate final prompt with context if available
         context_str = ""
         if context:
             context_str = "\n## Contextual Session Variables:\n"
-            for k, v in context.items():
-                context_str += f"- {k}: {v}\n"
+            for key, value in context.items():
+                context_str += f"- {key}: {value}\n"
 
         return [
             SystemMessage(content=self.system_prompt + context_str),
@@ -73,11 +74,9 @@ class BaseAgent:
     async def run(
         self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Runs the agent synchronously and returns the complete text response."""
-        logger.info(f"Running agent '{self.name}'")
+        logger.info("Running agent '%s'", self.name)
         messages = self._prepare_messages(user_message, context)
         model = get_chat_model()
-        # Use retry wrapper to handle transient 429 quota errors
         response = await _invoke_with_retry(
             model, messages, provider="gemini", model_name="gemini-3.5-flash"
         )
@@ -86,11 +85,10 @@ class BaseAgent:
     async def run_stream(
         self, user_message: str, context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[str]:
-        """Runs the agent and streams the response token-by-token."""
-        logger.info(f"Streaming agent '{self.name}'")
+        logger.info("Streaming agent '%s'", self.name)
         messages = self._prepare_messages(user_message, context)
         model = get_chat_model()
         async for chunk in model.astream(messages):
-            yield extract_text_content(chunk.content)
-
-
+            text = extract_text_content(chunk.content)
+            if text:
+                yield text
