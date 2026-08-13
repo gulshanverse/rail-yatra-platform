@@ -1,14 +1,16 @@
-import logging
+import asyncio
 import json
+import logging
+from typing import Any, Dict, Optional
+
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
 
-import asyncio
-from app.orchestrator.workflow import workflow_executor
-from app.memory.short_term import short_term_memory
 from app.memory.long_term import long_term_memory
+from app.memory.short_term import short_term_memory
+from app.orchestrator.workflow import workflow_executor
+from app.api.sse import format_sse
 
 logger = logging.getLogger("ai-service.api.endpoints")
 router = APIRouter()
@@ -28,20 +30,12 @@ class ChatStreamRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
-@router.post("/chat")
-async def chat(request: ChatRequest):
-    """
-    Accepts user chat query, runs LangGraph orchestrator,
-    and returns structured JSON response.
-    """
-    conv_id = request.conversation_id or "default-session"
-    user_id = request.user_id or "default-user"
-
+async def _build_context(request_context: Optional[Dict[str, Any]], conversation_id: str, user_id: str) -> dict:
     redis_context = {}
     try:
-        redis_context = await short_term_memory.get_session_context(conv_id)
+        redis_context = await short_term_memory.get_session_context(conversation_id)
     except Exception as e:
-        logger.warning(f"Failed to fetch short term memory: {e}")
+        logger.warning(f"Failed to fetch short term memory context: {e}")
 
     db_prefs = {}
     try:
@@ -50,14 +44,21 @@ async def chat(request: ChatRequest):
         logger.warning(f"Failed to fetch user preferences: {e}")
 
     travel_prefs = db_prefs.get("travelPrefs") or {}
-
-    combined_context = {
-        **(request.context or {}),
+    return {
+        **(request_context or {}),
         **redis_context,
         "user_id": user_id,
         "preferred_class": travel_prefs.get("preferred_class", "3A"),
         "seat_preference": travel_prefs.get("seat_preference", "lower"),
     }
+
+
+@router.post("/chat")
+async def chat(request: ChatRequest):
+    """Run the LangGraph orchestrator and return a structured response."""
+    conv_id = request.conversation_id or "default-session"
+    user_id = request.user_id or "default-user"
+    combined_context = await _build_context(request.context, conv_id, user_id)
 
     ai_response = await workflow_executor.execute(
         message=request.message,
@@ -83,43 +84,17 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/chat/stream")
-
 async def chat_stream(request: ChatStreamRequest):
-    """
-    Accepts user chat query, runs LangGraph orchestrator,
-    and returns a Server-Sent Events stream containing classified intent and tokens.
-    """
+    """Run the orchestrator and emit standards-compliant SSE events."""
     logger.info(
         f"Stream request: user={request.user_id}, conv={request.conversation_id}"
     )
-
-    # Load past memory context
-    redis_context = {}
-    try:
-        redis_context = await short_term_memory.get_session_context(request.conversation_id)
-    except Exception as e:
-        logger.warning(f"Failed to fetch short term memory context: {e}")
-
-    db_prefs = {}
-    try:
-        db_prefs = (await long_term_memory.get_user_preferences(request.user_id)) or {}
-    except Exception as e:
-        logger.warning(f"Failed to fetch user preferences: {e}")
-
-    travel_prefs = db_prefs.get("travelPrefs") or {}
-
-    # Combine context
-    combined_context = {
-        **(request.context or {}),
-        **redis_context,
-        "user_id": request.user_id,
-        "preferred_class": travel_prefs.get("preferred_class", "3A"),
-        "seat_preference": travel_prefs.get("seat_preference", "lower"),
-    }
+    combined_context = await _build_context(
+        request.context, request.conversation_id, request.user_id
+    )
 
     async def event_generator():
         try:
-            # 1. Execute the orchestration workflow pipeline
             ai_response = await workflow_executor.execute(
                 message=request.message,
                 user_id=request.user_id,
@@ -127,25 +102,24 @@ async def chat_stream(request: ChatStreamRequest):
                 context=combined_context,
             )
 
-            # 2. Yield classified intent event
-            yield f"data: {json.dumps({'type': 'intent', 'value': ai_response.intent})}\n\n"
+            yield format_sse({"type": "intent", "value": ai_response.intent})
 
-            # 3. Simulate streaming reply token-by-token (word-by-word) for UI compatibility
-            words = ai_response.response.split(" ")
+            # Preserve the canonical assistant response exactly. The SSE layer
+            # only frames it; it must never mutate Markdown or provider content.
+            response_text = str(ai_response.response or "")
+            words = response_text.split(" ")
             for i, word in enumerate(words):
                 space = " " if i > 0 else ""
-                yield f"data: {json.dumps({'type': 'token', 'value': space + word})}\n\n"
-                await asyncio.sleep(0.005)  # Responsive delay simulation
+                yield format_sse({"type": "token", "value": space + word})
+                await asyncio.sleep(0.005)
 
-            # Keep short-term memory updated with the assistant response
             try:
                 await short_term_memory.add_message(
-                    request.conversation_id, "assistant", ai_response.response
+                    request.conversation_id, "assistant", response_text
                 )
             except Exception as ex:
                 logger.warning(f"Error adding message to memory: {ex}")
 
-            # 4. Fetch travel choices if the query is travel/pnr related
             options_payload = []
             if ai_response.intent in [
                 "plan_travel",
@@ -161,7 +135,6 @@ async def chat_stream(request: ChatStreamRequest):
                     dest = combined_context.get("destination") or "BPL"
                     j_date = combined_context.get("journey_date") or "2026-07-28"
                     pref_cls = combined_context.get("preferred_class") or "3A"
-
                     req = TravelRequirement(
                         source=str(src).upper(),
                         destination=str(dest).upper(),
@@ -173,11 +146,26 @@ async def chat_stream(request: ChatStreamRequest):
                 except Exception as ex:
                     logger.error(f"Error compiling stream options: {ex}")
 
-            # 5. Yield done event
-            yield f"data: {json.dumps({'type': 'done', 'reply': ai_response.response, 'options': options_payload})}\n\n"
+            yield format_sse(
+                {
+                    "type": "done",
+                    "reply": response_text,
+                    "options": options_payload,
+                }
+            )
 
-        except Exception as e:
-            logger.error(f"Error in chat stream event generator: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Internal orchestrator error.'})}\n\n"
+        except Exception:
+            logger.exception("Error in chat stream event generator")
+            yield format_sse(
+                {"type": "error", "message": "Internal orchestrator error."}
+            )
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
