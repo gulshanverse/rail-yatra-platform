@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from typing import Any, AsyncIterator, Dict, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -63,26 +64,23 @@ async def _run_with_failover(messages: list, complexity: str = "high") -> Any:
     for spec in _candidate_models(complexity):
         try:
             model = get_chat_model(provider=spec.provider, model_name=spec.model)
-            # Do not use the provider's generic 3-attempt retry loop here. A quota
-            # failure should trigger model failover immediately, not wait and hit
-            # the same exhausted model repeatedly.
             response = await model.ainvoke(messages)
             logger.info("LLM request served by %s/%s", spec.provider, spec.model)
             return response
         except Exception as exc:
+            if isinstance(exc, ValueError):
+                logger.warning("Skipping unavailable model %s/%s: %s", spec.provider, spec.model, exc)
+                continue
             if not _is_quota_error(exc):
                 raise
             retry_after = _extract_retry_delay(exc)
-            last_quota_error = QuotaExhaustedError(
-                spec.provider, spec.model, retry_after
-            )
+            last_quota_error = QuotaExhaustedError(spec.provider, spec.model, retry_after)
             mark_quota_exhausted(spec.provider, spec.model, retry_after)
             logger.warning(
                 "Model %s/%s quota exhausted; switching immediately",
                 spec.provider,
                 spec.model,
             )
-            continue
 
     if last_quota_error:
         raise last_quota_error
@@ -95,9 +93,10 @@ def _is_quota_error(exc: Exception) -> bool:
 
 
 def _extract_retry_delay(exc: Exception) -> float:
-    import re
-
-    match = re.search(r"retry in ([\d.]+)s", str(exc), re.IGNORECASE)
+    text = str(exc)
+    if re.search(r"per\s*day|daily|RPD", text, re.IGNORECASE):
+        return 24 * 60 * 60
+    match = re.search(r"retry in ([\d.]+)s", text, re.IGNORECASE)
     return float(match.group(1)) if match else 60.0
 
 
@@ -150,12 +149,13 @@ class BaseAgent:
                         emitted_text = True
                         yield text
                 return
+            except ValueError as exc:
+                logger.warning("Skipping unavailable streaming model %s/%s: %s", spec.provider, spec.model, exc)
+                continue
             except Exception as exc:
                 if not _is_quota_error(exc):
                     raise
                 if emitted_text:
-                    # Switching after partial output would duplicate/corrupt the
-                    # assistant response, so fail the stream instead of mixing models.
                     raise
                 retry_after = _extract_retry_delay(exc)
                 mark_quota_exhausted(spec.provider, spec.model, retry_after)
