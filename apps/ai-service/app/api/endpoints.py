@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from typing import Any, Dict, Optional
 
@@ -7,10 +6,10 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.api.sse import format_sse
 from app.memory.long_term import long_term_memory
 from app.memory.short_term import short_term_memory
 from app.orchestrator.workflow import workflow_executor
-from app.api.sse import format_sse
 
 logger = logging.getLogger("ai-service.api.endpoints")
 router = APIRouter()
@@ -30,7 +29,9 @@ class ChatStreamRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
-async def _build_context(request_context: Optional[Dict[str, Any]], conversation_id: str, user_id: str) -> dict:
+async def _build_context(
+    request_context: Optional[Dict[str, Any]], conversation_id: str, user_id: str
+) -> dict:
     redis_context = {}
     try:
         redis_context = await short_term_memory.get_session_context(conversation_id)
