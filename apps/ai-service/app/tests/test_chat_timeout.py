@@ -5,7 +5,7 @@ import pytest
 from app.api import endpoints
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_execute_workflow_times_out(monkeypatch):
     async def stalled_execute(**_kwargs):
         await asyncio.sleep(1)
