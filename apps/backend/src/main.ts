@@ -62,7 +62,12 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   // 1. Validate environment configuration profiles on startup
-  const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
+  const requiredEnvVars = [
+    'DATABASE_URL',
+    'JWT_SECRET',
+    'JWT_REFRESH_SECRET',
+    'AI_SERVICE_URL',
+  ];
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
       logger.error(
