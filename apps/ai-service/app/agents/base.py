@@ -9,11 +9,7 @@ from app.core.model_registry import (
     mark_quota_exhausted,
     models_for_complexity,
 )
-from app.providers.llm import (
-    QuotaExhaustedError,
-    _invoke_with_retry,
-    get_chat_model,
-)
+from app.providers.llm import QuotaExhaustedError, get_chat_model
 
 logger = logging.getLogger("ai-service.agents.base")
 
@@ -62,21 +58,27 @@ def _candidate_models(complexity: str = "high") -> list[ModelSpec]:
 
 
 async def _run_with_failover(messages: list, complexity: str = "high") -> Any:
-    """Invoke the first healthy model and immediately fail over on quota exhaustion."""
+    """Call models in priority order and switch immediately on quota exhaustion."""
     last_quota_error: QuotaExhaustedError | None = None
     for spec in _candidate_models(complexity):
         try:
             model = get_chat_model(provider=spec.provider, model_name=spec.model)
-            response = await _invoke_with_retry(
-                model, messages, provider=spec.provider, model_name=spec.model
-            )
+            # Do not use the provider's generic 3-attempt retry loop here. A quota
+            # failure should trigger model failover immediately, not wait and hit
+            # the same exhausted model repeatedly.
+            response = await model.ainvoke(messages)
             logger.info("LLM request served by %s/%s", spec.provider, spec.model)
             return response
-        except QuotaExhaustedError as exc:
-            last_quota_error = exc
-            mark_quota_exhausted(spec.provider, spec.model, exc.retry_after)
+        except Exception as exc:
+            if not _is_quota_error(exc):
+                raise
+            retry_after = _extract_retry_delay(exc)
+            last_quota_error = QuotaExhaustedError(
+                spec.provider, spec.model, retry_after
+            )
+            mark_quota_exhausted(spec.provider, spec.model, retry_after)
             logger.warning(
-                "Model %s/%s exhausted quota; marked unavailable and failing over",
+                "Model %s/%s quota exhausted; switching immediately",
                 spec.provider,
                 spec.model,
             )
@@ -85,6 +87,18 @@ async def _run_with_failover(messages: list, complexity: str = "high") -> Any:
     if last_quota_error:
         raise last_quota_error
     raise RuntimeError("No enabled LLM model is available")
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    text = str(exc).upper()
+    return "429" in text or "RESOURCE_EXHAUSTED" in text or "QUOTA" in text
+
+
+def _extract_retry_delay(exc: Exception) -> float:
+    import re
+
+    match = re.search(r"retry in ([\d.]+)s", str(exc), re.IGNORECASE)
+    return float(match.group(1)) if match else 60.0
 
 
 class BaseAgent:
@@ -136,15 +150,19 @@ class BaseAgent:
                         emitted_text = True
                         yield text
                 return
-            except QuotaExhaustedError as exc:
-                if emitted_text:
+            except Exception as exc:
+                if not _is_quota_error(exc):
                     raise
-                mark_quota_exhausted(spec.provider, spec.model, exc.retry_after)
+                if emitted_text:
+                    # Switching after partial output would duplicate/corrupt the
+                    # assistant response, so fail the stream instead of mixing models.
+                    raise
+                retry_after = _extract_retry_delay(exc)
+                mark_quota_exhausted(spec.provider, spec.model, retry_after)
                 logger.warning(
-                    "Streaming model %s/%s exhausted quota before output; failing over",
+                    "Streaming model %s/%s quota exhausted before output; switching",
                     spec.provider,
                     spec.model,
                 )
-                continue
 
         raise QuotaExhaustedError("router", "all-configured-models")
