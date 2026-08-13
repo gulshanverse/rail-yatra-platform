@@ -4,7 +4,11 @@ from typing import Any, AsyncIterator, Dict, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.core.model_registry import ModelSpec, models_for_complexity
+from app.core.model_registry import (
+    ModelSpec,
+    mark_quota_exhausted,
+    models_for_complexity,
+)
 from app.providers.llm import (
     QuotaExhaustedError,
     _invoke_with_retry,
@@ -41,13 +45,9 @@ def extract_text_content(content: Any) -> str:
     return str(content).strip()
 
 
-def _candidate_models(complexity: str = "standard") -> list[ModelSpec]:
+def _candidate_models(complexity: str = "high") -> list[ModelSpec]:
     """Build the ordered failover pool from supported and configured providers."""
     candidates = models_for_complexity(complexity)
-
-    # Cross-provider fallbacks are opt-in via explicit model environment variables.
-    # This avoids guessing model names while still allowing a production deployment
-    # to use OpenAI/Anthropic/OpenRouter when their credentials are configured.
     optional = (
         ("openai", os.getenv("OPENAI_FALLBACK_MODEL")),
         ("anthropic", os.getenv("ANTHROPIC_FALLBACK_MODEL")),
@@ -61,7 +61,7 @@ def _candidate_models(complexity: str = "standard") -> list[ModelSpec]:
     return candidates
 
 
-async def _run_with_failover(messages: list, complexity: str = "standard") -> Any:
+async def _run_with_failover(messages: list, complexity: str = "high") -> Any:
     """Invoke the first healthy model and immediately fail over on quota exhaustion."""
     last_quota_error: QuotaExhaustedError | None = None
     for spec in _candidate_models(complexity):
@@ -74,8 +74,9 @@ async def _run_with_failover(messages: list, complexity: str = "standard") -> An
             return response
         except QuotaExhaustedError as exc:
             last_quota_error = exc
+            mark_quota_exhausted(spec.provider, spec.model, exc.retry_after)
             logger.warning(
-                "Model %s/%s exhausted quota; failing over immediately",
+                "Model %s/%s exhausted quota; marked unavailable and failing over",
                 spec.provider,
                 spec.model,
             )
@@ -124,7 +125,7 @@ class BaseAgent:
         logger.info("Streaming agent '%s'", self.name)
         messages = self._prepare_messages(user_message, context)
 
-        for spec in _candidate_models("standard"):
+        for spec in _candidate_models("high"):
             emitted_text = False
             try:
                 model = get_chat_model(provider=spec.provider, model_name=spec.model)
@@ -135,11 +136,10 @@ class BaseAgent:
                         emitted_text = True
                         yield text
                 return
-            except QuotaExhaustedError:
+            except QuotaExhaustedError as exc:
                 if emitted_text:
-                    # Switching after partial output would duplicate or corrupt the
-                    # assistant response. Surface the error instead of mixing models.
                     raise
+                mark_quota_exhausted(spec.provider, spec.model, exc.retry_after)
                 logger.warning(
                     "Streaming model %s/%s exhausted quota before output; failing over",
                     spec.provider,
