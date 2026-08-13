@@ -19,6 +19,18 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  private setRefreshCookie(response: express.Response, token: string) {
+    response.cookie('refresh_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      // Frontend and backend are on different sites (Vercel/Render), so the
+      // refresh cookie must be SameSite=None in production for fetch() calls.
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+  }
+
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() dto: RegisterDto) {
@@ -37,14 +49,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: express.Response,
   ) {
     const result = await this.authService.login(dto);
-
-    // Set refresh token in HttpOnly SameSite Secure cookie
-    response.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    this.setRefreshCookie(response, result.refreshToken);
 
     return {
       success: true,
@@ -62,8 +67,7 @@ export class AuthController {
     @Req() request: express.Request,
     @Res({ passthrough: true }) response: express.Response,
   ) {
-    const cookies = request.cookies as
-      Record<string, string | undefined> | undefined;
+    const cookies = request.cookies as Record<string, string | undefined> | undefined;
     const refreshToken = cookies?.['refresh_token'];
     if (!refreshToken) {
       return response.status(HttpStatus.UNAUTHORIZED).json({
@@ -76,16 +80,8 @@ export class AuthController {
     }
 
     const payload = this.authService.verifyRefreshToken(refreshToken);
-    const accessToken = await this.authService.generateAccessTokenFromUserId(
-      payload.sub,
-    );
-
-    return {
-      success: true,
-      data: {
-        accessToken,
-      },
-    };
+    const accessToken = await this.authService.generateAccessTokenFromUserId(payload.sub);
+    return { success: true, data: { accessToken } };
   }
 
   @Post('logout')
@@ -94,20 +90,15 @@ export class AuthController {
     response.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
     });
-    return {
-      success: true,
-      message: 'User logged out successfully.',
-    };
+    return { success: true, message: 'User logged out successfully.' };
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
   getMe(@Req() request: import('../common/interfaces').AuthenticatedRequest) {
-    return {
-      success: true,
-      data: request.user,
-    };
+    return { success: true, data: request.user };
   }
 }
