@@ -14,6 +14,8 @@ from app.orchestrator.workflow import workflow_executor
 logger = logging.getLogger("ai-service.api.endpoints")
 router = APIRouter()
 
+WORKFLOW_TIMEOUT_SECONDS = 45
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -54,6 +56,19 @@ async def _build_context(
     }
 
 
+async def _execute_workflow(request: ChatRequest | ChatStreamRequest, context: dict):
+    """Execute the AI graph with a hard upper bound so a provider outage cannot hang chat forever."""
+    return await asyncio.wait_for(
+        workflow_executor.execute(
+            message=request.message,
+            user_id=request.user_id or "default-user",
+            conversation_id=request.conversation_id or "default-session",
+            context=context,
+        ),
+        timeout=WORKFLOW_TIMEOUT_SECONDS,
+    )
+
+
 @router.post("/chat")
 async def chat(request: ChatRequest):
     """Run the LangGraph orchestrator and return a structured response."""
@@ -61,12 +76,24 @@ async def chat(request: ChatRequest):
     user_id = request.user_id or "default-user"
     combined_context = await _build_context(request.context, conv_id, user_id)
 
-    ai_response = await workflow_executor.execute(
-        message=request.message,
-        user_id=user_id,
-        conversation_id=conv_id,
-        context=combined_context,
-    )
+    try:
+        ai_response = await _execute_workflow(request, combined_context)
+    except asyncio.TimeoutError:
+        logger.error(
+            "AI workflow timed out after %ss: user=%s conversation=%s",
+            WORKFLOW_TIMEOUT_SECONDS,
+            user_id,
+            conv_id,
+        )
+        return {
+            "reply": "I’m taking longer than expected to process that. Please try again in a moment.",
+            "parsed_intent": "conversation",
+            "confidence": 0.0,
+            "explanation": "AI workflow timeout",
+            "credits_left": 100,
+            "agent": "timeout-handler",
+            "metadata": {"error_code": "AI_WORKFLOW_TIMEOUT"},
+        }
 
     try:
         await short_term_memory.add_message(conv_id, "assistant", ai_response.response)
@@ -96,18 +123,41 @@ async def chat_stream(request: ChatStreamRequest):
 
     async def event_generator():
         try:
-            ai_response = await workflow_executor.execute(
-                message=request.message,
-                user_id=request.user_id,
-                conversation_id=request.conversation_id,
-                context=combined_context,
-            )
+            yield format_sse({"type": "status", "value": "processing"})
+
+            try:
+                ai_response = await _execute_workflow(request, combined_context)
+            except asyncio.TimeoutError:
+                logger.error(
+                    "AI stream workflow timed out after %ss: user=%s conversation=%s",
+                    WORKFLOW_TIMEOUT_SECONDS,
+                    request.user_id,
+                    request.conversation_id,
+                )
+                yield format_sse(
+                    {
+                        "type": "error",
+                        "message": "The AI service took too long to respond. Please try again in a moment.",
+                        "code": "AI_WORKFLOW_TIMEOUT",
+                    }
+                )
+                return
 
             yield format_sse({"type": "intent", "value": ai_response.intent})
 
+            response_text = str(ai_response.response or "").strip()
+            if not response_text:
+                yield format_sse(
+                    {
+                        "type": "error",
+                        "message": "The AI service returned an empty response. Please try again.",
+                        "code": "EMPTY_AI_RESPONSE",
+                    }
+                )
+                return
+
             # Preserve the canonical assistant response exactly. The SSE layer
             # only frames it; it must never mutate Markdown or provider content.
-            response_text = str(ai_response.response or "")
             words = response_text.split(" ")
             for i, word in enumerate(words):
                 space = " " if i > 0 else ""
