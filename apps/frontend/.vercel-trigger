@@ -1,0 +1,1 @@
+PR preview deployment marker for chat smoke testing. This file is intentionally empty of application logic and is only used to trigger the Vercel preview for PR #15.
