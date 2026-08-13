@@ -9,6 +9,42 @@ export interface SSEEvent {
   id?: string;
 }
 
+interface SSEErrorPayload {
+  type?: string;
+  message?: string;
+  error?: string;
+}
+
+const DEFAULT_CHAT_ERROR = 'RailYatra AI could not complete that request. Please try again.';
+
+function normalizeErrorEvent(data: string): string {
+  try {
+    const payload = JSON.parse(data) as SSEErrorPayload;
+    if (payload.type !== 'error') return data;
+
+    const rawMessage = typeof payload.message === 'string'
+      ? payload.message
+      : typeof payload.error === 'string'
+        ? payload.error
+        : '';
+
+    const message = rawMessage
+      .replace(/^AI Service error \(\d+\):\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const friendly = /quota|rate.?limit|resource.?exhaust|429/i.test(message)
+      ? 'RailYatra AI is temporarily rate-limited. Please try again in a moment.'
+      : /offline|unreachable|network|fetch failed|timeout|timed out/i.test(message)
+        ? 'RailYatra AI is temporarily unavailable. Please try again in a moment.'
+        : message || DEFAULT_CHAT_ERROR;
+
+    return JSON.stringify({ type: 'done', reply: friendly });
+  } catch {
+    return data;
+  }
+}
+
 export function parseSSEBuffer(buffer: string): [SSEEvent[], string] {
   const events: SSEEvent[] = [];
   while (true) {
@@ -38,7 +74,7 @@ export function parseSSEBuffer(buffer: string): [SSEEvent[], string] {
     }
 
     if (dataLines.length > 0) {
-      events.push({ data: dataLines.join("\n"), event, id });
+      events.push({ data: normalizeErrorEvent(dataLines.join("\n")), event, id });
     }
   }
   return [events, buffer];
