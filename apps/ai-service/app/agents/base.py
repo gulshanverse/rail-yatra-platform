@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -13,6 +14,10 @@ from app.core.model_registry import (
 from app.providers.llm import QuotaExhaustedError, get_chat_model
 
 logger = logging.getLogger("ai-service.agents.base")
+
+# Keep the workflow responsive even when a provider connection hangs instead of
+# returning a 429. Four candidates can therefore be probed within the 45s workflow cap.
+MODEL_REQUEST_TIMEOUT_SECONDS = float(os.getenv("MODEL_REQUEST_TIMEOUT_SECONDS", "10"))
 
 
 def extract_text_content(content: Any) -> str:
@@ -58,35 +63,6 @@ def _candidate_models(complexity: str = "high") -> list[ModelSpec]:
     return candidates
 
 
-async def _run_with_failover(messages: list, complexity: str = "high") -> Any:
-    """Call models in priority order and switch immediately on quota exhaustion."""
-    last_quota_error: QuotaExhaustedError | None = None
-    for spec in _candidate_models(complexity):
-        try:
-            model = get_chat_model(provider=spec.provider, model_name=spec.model)
-            response = await model.ainvoke(messages)
-            logger.info("LLM request served by %s/%s", spec.provider, spec.model)
-            return response
-        except Exception as exc:
-            if isinstance(exc, ValueError):
-                logger.warning("Skipping unavailable model %s/%s: %s", spec.provider, spec.model, exc)
-                continue
-            if not _is_quota_error(exc):
-                raise
-            retry_after = _extract_retry_delay(exc)
-            last_quota_error = QuotaExhaustedError(spec.provider, spec.model, retry_after)
-            mark_quota_exhausted(spec.provider, spec.model, retry_after)
-            logger.warning(
-                "Model %s/%s quota exhausted; switching immediately",
-                spec.provider,
-                spec.model,
-            )
-
-    if last_quota_error:
-        raise last_quota_error
-    raise RuntimeError("No enabled LLM model is available")
-
-
 def _is_quota_error(exc: Exception) -> bool:
     text = str(exc).upper()
     return "429" in text or "RESOURCE_EXHAUSTED" in text or "QUOTA" in text
@@ -98,6 +74,59 @@ def _extract_retry_delay(exc: Exception) -> float:
         return 24 * 60 * 60
     match = re.search(r"retry in ([\d.]+)s", text, re.IGNORECASE)
     return float(match.group(1)) if match else 60.0
+
+
+def _mark_timeout_unavailable(spec: ModelSpec) -> None:
+    # A hanging provider is treated as temporarily unhealthy just like a quota
+    # failure, preventing every request from paying the same timeout penalty.
+    mark_quota_exhausted(spec.provider, spec.model, MODEL_REQUEST_TIMEOUT_SECONDS * 3)
+    logger.warning(
+        "Model %s/%s timed out after %.1fs; temporarily skipping it",
+        spec.provider,
+        spec.model,
+        MODEL_REQUEST_TIMEOUT_SECONDS,
+    )
+
+
+async def _run_with_failover(messages: list, complexity: str = "high") -> Any:
+    """Call models in priority order with bounded latency and quota failover."""
+    last_quota_error: QuotaExhaustedError | None = None
+    for spec in _candidate_models(complexity):
+        try:
+            model = get_chat_model(provider=spec.provider, model_name=spec.model)
+            response = await asyncio.wait_for(
+                model.ainvoke(messages), timeout=MODEL_REQUEST_TIMEOUT_SECONDS
+            )
+            logger.info("LLM request served by %s/%s", spec.provider, spec.model)
+            return response
+        except asyncio.TimeoutError:
+            _mark_timeout_unavailable(spec)
+            continue
+        except Exception as exc:
+            if isinstance(exc, ValueError):
+                logger.warning(
+                    "Skipping unavailable model %s/%s: %s",
+                    spec.provider,
+                    spec.model,
+                    exc,
+                )
+                continue
+            if not _is_quota_error(exc):
+                raise
+            retry_after = _extract_retry_delay(exc)
+            last_quota_error = QuotaExhaustedError(
+                spec.provider, spec.model, retry_after
+            )
+            mark_quota_exhausted(spec.provider, spec.model, retry_after)
+            logger.warning(
+                "Model %s/%s quota exhausted; switching immediately",
+                spec.provider,
+                spec.model,
+            )
+
+    if last_quota_error:
+        raise last_quota_error
+    raise RuntimeError("No enabled LLM model is available")
 
 
 class BaseAgent:
@@ -143,14 +172,31 @@ class BaseAgent:
             try:
                 model = get_chat_model(provider=spec.provider, model_name=spec.model)
                 logger.info("Streaming with %s/%s", spec.provider, spec.model)
-                async for chunk in model.astream(messages):
+                stream = model.astream(messages)
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            stream.__anext__(), timeout=MODEL_REQUEST_TIMEOUT_SECONDS
+                        )
+                    except StopAsyncIteration:
+                        break
                     text = extract_text_content(chunk.content)
                     if text:
                         emitted_text = True
                         yield text
                 return
+            except asyncio.TimeoutError:
+                if emitted_text:
+                    raise
+                _mark_timeout_unavailable(spec)
+                continue
             except ValueError as exc:
-                logger.warning("Skipping unavailable streaming model %s/%s: %s", spec.provider, spec.model, exc)
+                logger.warning(
+                    "Skipping unavailable streaming model %s/%s: %s",
+                    spec.provider,
+                    spec.model,
+                    exc,
+                )
                 continue
             except Exception as exc:
                 if not _is_quota_error(exc):
