@@ -2,7 +2,7 @@ import logging
 import json
 import re
 from typing import Dict, Any, AsyncIterator, Optional
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, extract_text_content
 from app.engine.core import journey_intelligence_engine
 from app.engine.models import TravelRequirement, UserPreferences
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -58,7 +58,7 @@ class JourneyIntelligenceAgent(BaseAgent):
                 HumanMessage(content=user_message),
             ]
             response = await self.llm.ainvoke(messages)
-            content = str(response.content).strip()
+            content = extract_text_content(response.content).strip()
 
             # Clean possible markdown formatting
             clean_content = re.sub(

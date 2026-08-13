@@ -399,8 +399,46 @@ export default function AIWorkspace() {
   const activeOption = activeOptionIndex !== null && sortedOptions[activeOptionIndex] ? sortedOptions[activeOptionIndex] : null;
 
   // Simple clean helper to render markdown
-  const renderMarkdown = (text: string) => {
-    if (!text) return null;
+  const renderMarkdown = (rawText: string) => {
+    if (!rawText) return null;
+    let text = rawText.trim();
+
+    // Defense-in-depth: Normalize Python repr / JSON structures if present
+    if (
+      (text.startsWith('[') && text.endsWith(']')) ||
+      (text.startsWith('{') && text.endsWith('}'))
+    ) {
+      try {
+        const jsonish = text
+          .replace(/'/g, '"')
+          .replace(/None/g, 'null')
+          .replace(/True/g, 'true')
+          .replace(/False/g, 'false');
+        const parsed = JSON.parse(jsonish);
+        if (Array.isArray(parsed)) {
+          const parts = parsed
+            .map((item) =>
+              typeof item === 'object' && item !== null
+                ? item.text || item.reply || item.content || ''
+                : String(item)
+            )
+            .filter(Boolean);
+          if (parts.length > 0) text = parts.join('\n\n');
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          const pObj = parsed as Record<string, unknown>;
+          if (typeof pObj.text === 'string') text = pObj.text;
+          else if (typeof pObj.reply === 'string') text = pObj.reply;
+          else if (typeof pObj.content === 'string') text = pObj.content;
+        }
+      } catch {
+        const textMatch =
+          /'text':\s*'([\s\S]+?)'(?:,\s*'extras'|,\s*'signature'|\})/g.exec(text);
+        if (textMatch && textMatch[1]) {
+          text = textMatch[1].replace(/\\n/g, '\n').replace(/\\'/g, "'");
+        }
+      }
+    }
+
     if (text.includes('|') && text.includes('\n')) {
       const lines = text.split('\n');
       const tableLines = lines.filter(line => line.trim().startsWith('|'));

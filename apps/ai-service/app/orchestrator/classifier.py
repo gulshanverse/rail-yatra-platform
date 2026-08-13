@@ -5,6 +5,7 @@ import time
 from typing import Dict, Any, Optional
 
 from app.providers.llm import get_chat_model, _invoke_with_retry
+from app.agents.base import extract_text_content
 from app.prompts.classifier import INTENT_CLASSIFIER_PROMPT
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -85,7 +86,7 @@ class IntentClassifier:
             response = await _invoke_with_retry(
                 self.llm, messages, provider="gemini", model_name="gemini-3.5-flash"
             )
-            content = str(response.content).strip()
+            content = extract_text_content(response.content).strip()
 
             # Clean possible markdown code fences from JSON output
             clean_content = re.sub(

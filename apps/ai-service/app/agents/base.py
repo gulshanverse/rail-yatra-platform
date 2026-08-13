@@ -6,6 +6,41 @@ from app.providers.llm import get_chat_model, _invoke_with_retry
 logger = logging.getLogger("ai-service.agents.base")
 
 
+def extract_text_content(content: Any) -> str:
+    """
+    Normalizes LangChain AIMessage.content into a plain text string.
+
+    Gemini models via LangChain may return content as:
+    - A plain string: "Hello, I can help you..."
+    - A list of structured content blocks:
+      [{"type": "text", "text": "Hello...", "extras": {"signature": "..."}}]
+
+    This function extracts only the human-readable text and discards
+    provider metadata (extras, signatures, execution paths).
+    """
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        text_parts = []
+        for block in content:
+            if isinstance(block, dict):
+                # Extract text from {"type": "text", "text": "..."} blocks
+                if block.get("type") == "text" and "text" in block:
+                    text_parts.append(block["text"])
+                elif "text" in block:
+                    text_parts.append(block["text"])
+                elif "content" in block:
+                    text_parts.append(str(block["content"]))
+            elif isinstance(block, str):
+                text_parts.append(block)
+        if text_parts:
+            return "\n\n".join(text_parts)
+
+    # Final fallback: convert to string but should rarely be reached
+    return str(content)
+
+
 class BaseAgent:
     """
     Base Agent class that initializes the LLM provider and defines
@@ -46,7 +81,7 @@ class BaseAgent:
         response = await _invoke_with_retry(
             model, messages, provider="gemini", model_name="gemini-3.5-flash"
         )
-        return str(response.content)
+        return extract_text_content(response.content)
 
     async def run_stream(
         self, user_message: str, context: Optional[Dict[str, Any]] = None
@@ -56,5 +91,6 @@ class BaseAgent:
         messages = self._prepare_messages(user_message, context)
         model = get_chat_model()
         async for chunk in model.astream(messages):
-            yield str(chunk.content)
+            yield extract_text_content(chunk.content)
+
 

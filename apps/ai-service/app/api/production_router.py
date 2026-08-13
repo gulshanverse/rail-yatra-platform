@@ -120,7 +120,8 @@ async def test_gemini_direct(model: str = "gemini-3.5-flash"):
         from langchain_core.messages import HumanMessage
         llm = ChatGoogleGenerativeAI(google_api_key=google_key, model=model)
         res = await llm.ainvoke([HumanMessage(content="Reply with exactly: GEMINI_ONLINE_OK")])
-        return {"ok": True, "reply": str(res.content), "model": model}
+        from app.agents.base import extract_text_content
+        return {"ok": True, "reply": extract_text_content(res.content), "model": model}
     except Exception as e:
         return {"ok": False, "error": str(e), "type": type(e).__name__, "tested_model": model}
 
