@@ -108,10 +108,16 @@ export class ConversationsController {
       data: { conversationId: id, role: 'user', content: body.message },
     });
 
+    const aiServiceUrl = process.env.AI_SERVICE_URL?.trim();
+    if (!aiServiceUrl) {
+      throw new InternalServerErrorException(
+        'AI Core service is not configured. Set AI_SERVICE_URL on the backend deployment.',
+      );
+    }
+
     let fastapiResponse: Response;
     try {
-      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      fastapiResponse = await fetch(`${aiServiceUrl}/chat/stream`, {
+      fastapiResponse = await fetch(`${aiServiceUrl.replace(/\/$/, '')}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,9 +201,6 @@ export class ConversationsController {
         }
       }
 
-      // Flush any final decoder bytes. A valid SSE stream should end on a
-      // blank-line boundary, so incomplete trailing data is intentionally not
-      // persisted as a partial assistant response.
       buffer += decoder.decode();
     } catch (streamError) {
       if (!streamClosed) console.error('Error during streaming read:', streamError);
