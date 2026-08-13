@@ -1,33 +1,31 @@
 import logging
+import os
 from typing import Any, AsyncIterator, Dict, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.providers.llm import _invoke_with_retry, get_chat_model
+from app.core.model_registry import ModelSpec, models_for_complexity
+from app.providers.llm import (
+    QuotaExhaustedError,
+    _invoke_with_retry,
+    get_chat_model,
+)
 
 logger = logging.getLogger("ai-service.agents.base")
 
 
 def extract_text_content(content: Any) -> str:
-    """Return only human-readable assistant text from provider/LangChain content.
-
-    Gemini responses can be strings, structured text blocks, dictionaries, or
-    empty values. Provider metadata such as signatures and extras must never
-    reach the chat UI.
-    """
+    """Return only human-readable assistant text from provider/LangChain content."""
     if content is None:
         return ""
-
     if isinstance(content, str):
         return content.strip()
-
     if isinstance(content, dict):
         for key in ("text", "content", "reply", "message"):
             value = content.get(key)
             if isinstance(value, str):
                 return value.strip()
         return ""
-
     if isinstance(content, list):
         text_parts: list[str] = []
         for block in content:
@@ -36,18 +34,60 @@ def extract_text_content(content: Any) -> str:
                     text_parts.append(block.strip())
                 continue
             if isinstance(block, dict):
-                value = block.get("text")
-                if not isinstance(value, str):
-                    value = block.get("content")
+                value = block.get("text") or block.get("content")
                 if isinstance(value, str) and value.strip():
                     text_parts.append(value.strip())
         return "\n\n".join(text_parts)
-
     return str(content).strip()
 
 
+def _candidate_models(complexity: str = "standard") -> list[ModelSpec]:
+    """Build the ordered failover pool from supported and configured providers."""
+    candidates = models_for_complexity(complexity)
+
+    # Cross-provider fallbacks are opt-in via explicit model environment variables.
+    # This avoids guessing model names while still allowing a production deployment
+    # to use OpenAI/Anthropic/OpenRouter when their credentials are configured.
+    optional = (
+        ("openai", os.getenv("OPENAI_FALLBACK_MODEL")),
+        ("anthropic", os.getenv("ANTHROPIC_FALLBACK_MODEL")),
+        ("openrouter", os.getenv("OPENROUTER_FALLBACK_MODEL")),
+    )
+    priority = max((item.priority for item in candidates), default=0) + 10
+    for provider, model in optional:
+        if model and model.strip():
+            candidates.append(ModelSpec(provider, model.strip(), priority, "standard"))
+            priority += 10
+    return candidates
+
+
+async def _run_with_failover(messages: list, complexity: str = "standard") -> Any:
+    """Invoke the first healthy model and immediately fail over on quota exhaustion."""
+    last_quota_error: QuotaExhaustedError | None = None
+    for spec in _candidate_models(complexity):
+        try:
+            model = get_chat_model(provider=spec.provider, model_name=spec.model)
+            response = await _invoke_with_retry(
+                model, messages, provider=spec.provider, model_name=spec.model
+            )
+            logger.info("LLM request served by %s/%s", spec.provider, spec.model)
+            return response
+        except QuotaExhaustedError as exc:
+            last_quota_error = exc
+            logger.warning(
+                "Model %s/%s exhausted quota; failing over immediately",
+                spec.provider,
+                spec.model,
+            )
+            continue
+
+    if last_quota_error:
+        raise last_quota_error
+    raise RuntimeError("No enabled LLM model is available")
+
+
 class BaseAgent:
-    """Base agent with shared LLM setup and response normalization."""
+    """Base agent with shared LLM setup, normalization, and model failover."""
 
     def __init__(self, name: str, system_prompt: str):
         self.name = name
@@ -65,7 +105,6 @@ class BaseAgent:
             context_str = "\n## Contextual Session Variables:\n"
             for key, value in context.items():
                 context_str += f"- {key}: {value}\n"
-
         return [
             SystemMessage(content=self.system_prompt + context_str),
             HumanMessage(content=user_message),
@@ -76,10 +115,7 @@ class BaseAgent:
     ) -> str:
         logger.info("Running agent '%s'", self.name)
         messages = self._prepare_messages(user_message, context)
-        model = get_chat_model()
-        response = await _invoke_with_retry(
-            model, messages, provider="gemini", model_name="gemini-3.5-flash"
-        )
+        response = await _run_with_failover(messages)
         return extract_text_content(response.content)
 
     async def run_stream(
@@ -87,8 +123,28 @@ class BaseAgent:
     ) -> AsyncIterator[str]:
         logger.info("Streaming agent '%s'", self.name)
         messages = self._prepare_messages(user_message, context)
-        model = get_chat_model()
-        async for chunk in model.astream(messages):
-            text = extract_text_content(chunk.content)
-            if text:
-                yield text
+
+        for spec in _candidate_models("standard"):
+            emitted_text = False
+            try:
+                model = get_chat_model(provider=spec.provider, model_name=spec.model)
+                logger.info("Streaming with %s/%s", spec.provider, spec.model)
+                async for chunk in model.astream(messages):
+                    text = extract_text_content(chunk.content)
+                    if text:
+                        emitted_text = True
+                        yield text
+                return
+            except QuotaExhaustedError:
+                if emitted_text:
+                    # Switching after partial output would duplicate or corrupt the
+                    # assistant response. Surface the error instead of mixing models.
+                    raise
+                logger.warning(
+                    "Streaming model %s/%s exhausted quota before output; failing over",
+                    spec.provider,
+                    spec.model,
+                )
+                continue
+
+        raise QuotaExhaustedError("router", "all-configured-models")
