@@ -5,6 +5,11 @@ import pytest
 from app.api import endpoints
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
 @pytest.mark.anyio
 async def test_execute_workflow_times_out(monkeypatch):
     async def stalled_execute(**_kwargs):
