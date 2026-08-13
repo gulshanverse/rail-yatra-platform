@@ -13,14 +13,31 @@ interface SSEErrorPayload {
   type?: string;
   message?: string;
   error?: string;
+  statusCode?: number;
 }
 
 const DEFAULT_CHAT_ERROR = 'RailYatra AI could not complete that request. Please try again.';
 
-function normalizeErrorEvent(data: string): string {
+function friendlyMessage(rawMessage: string): string {
+  const message = rawMessage
+    .replace(/^AI Service error \(\d+\):\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (/quota|rate.?limit|resource.?exhaust|429/i.test(message)) {
+    return 'RailYatra AI is temporarily rate-limited. Please try again in a moment.';
+  }
+  if (/offline|unreachable|network|fetch failed|timeout|timed out|502|503|504/i.test(message)) {
+    return 'RailYatra AI is temporarily unavailable. Please try again in a moment.';
+  }
+  return message || DEFAULT_CHAT_ERROR;
+}
+
+function normalizeErrorPayload(data: string): string {
   try {
     const payload = JSON.parse(data) as SSEErrorPayload;
-    if (payload.type !== 'error') return data;
+    const isError = payload.type === 'error' || typeof payload.statusCode === 'number';
+    if (!isError) return data;
 
     const rawMessage = typeof payload.message === 'string'
       ? payload.message
@@ -28,18 +45,7 @@ function normalizeErrorEvent(data: string): string {
         ? payload.error
         : '';
 
-    const message = rawMessage
-      .replace(/^AI Service error \(\d+\):\s*/i, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    const friendly = /quota|rate.?limit|resource.?exhaust|429/i.test(message)
-      ? 'RailYatra AI is temporarily rate-limited. Please try again in a moment.'
-      : /offline|unreachable|network|fetch failed|timeout|timed out/i.test(message)
-        ? 'RailYatra AI is temporarily unavailable. Please try again in a moment.'
-        : message || DEFAULT_CHAT_ERROR;
-
-    return JSON.stringify({ type: 'done', reply: friendly });
+    return JSON.stringify({ type: 'done', reply: friendlyMessage(rawMessage) });
   } catch {
     return data;
   }
@@ -74,8 +80,22 @@ export function parseSSEBuffer(buffer: string): [SSEEvent[], string] {
     }
 
     if (dataLines.length > 0) {
-      events.push({ data: normalizeErrorEvent(dataLines.join("\n")), event, id });
+      events.push({ data: normalizeErrorPayload(dataLines.join("\n")), event, id });
     }
   }
+
+  const trimmed = buffer.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const payload = JSON.parse(trimmed) as SSEErrorPayload;
+      if (typeof payload.statusCode === 'number' || payload.type === 'error') {
+        events.push({ data: normalizeErrorPayload(trimmed) });
+        return [events, ''];
+      }
+    } catch {
+      // Keep incomplete or non-error JSON in the remainder.
+    }
+  }
+
   return [events, buffer];
 }
