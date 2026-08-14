@@ -7,23 +7,16 @@ import { useAuthStore } from '../store/authStore';
 import { API_BASE_URL, authenticatedFetch } from '../lib/api';
 import { parseSSEBuffer } from '../lib/sse';
 import { JourneyAskAI, JourneyDecisionWorkspace } from '../components/journey';
-import { ConversationShell } from '../components/conversation';
-import { JourneyContextCard, type JourneyContext } from '../components/conversation';
+import { ConversationShell, JourneyContextCard, type JourneyContext } from '../components/conversation';
 import { HomeIntelligence, HomeTrustStatus, JourneyComposer, RecentJourneys } from '../components/home';
 
-interface AIResponse {
-  reply: string;
-  parsed_intent: string;
-  explanation: string;
-}
-
+interface AIResponse { reply: string; parsed_intent: string; explanation: string; }
 const DECISION_CONVERSATION_KEY = 'railyatra_decision_engine_conversation_id';
 
 function extractRoute(query: string) {
   const match = query.match(/(.+?)\s+(?:to|→)\s+(.+?)(?=\s+(?:for|on|today|tomorrow|next)\b|$)/i);
   return { origin: match?.[1]?.trim(), destination: match?.[2]?.trim() };
 }
-
 function extractDate(query: string) {
   const match = query.match(/\b(today|tomorrow|next\s+\w+|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/i);
   return match?.[1];
@@ -48,7 +41,6 @@ export default function Home() {
     setConversationId(data.id);
     return data.id;
   };
-
   const sendDecisionMessage = async (id: string, message: string) => authenticatedFetch(`${API_BASE_URL}/api/conversations/${id}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, context: { current_page: '/', surface: 'home-journey-composer', journey: journeyContext } }) });
 
   const handleRunQuery = async (userQuery: string) => {
@@ -57,16 +49,14 @@ export default function Home() {
     setLastQuery(query);
     const route = extractRoute(query);
     setJourneyContext((current) => ({ ...current, origin: route.origin ?? current.origin, destination: route.destination ?? current.destination, date: extractDate(query) ?? current.date }));
-    setAiLoading(true);
-    setAiResponse(null);
+    setAiLoading(true); setAiResponse(null);
     try {
       let activeConversationId = conversationId ?? sessionStorage.getItem(conversationStorageKey);
       let response: Response;
       if (activeConversationId) {
         response = await sendDecisionMessage(activeConversationId, query);
         if (response.status === 404) {
-          sessionStorage.removeItem(conversationStorageKey);
-          setConversationId(null);
+          sessionStorage.removeItem(conversationStorageKey); setConversationId(null);
           activeConversationId = await createDecisionConversation(query);
           response = await sendDecisionMessage(activeConversationId, query);
         }
@@ -76,12 +66,8 @@ export default function Home() {
       }
       if (!response.ok) throw new Error(`Decision Engine request failed (${response.status})`);
       if (!response.body) throw new Error('Readable stream not supported');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let accumulated = '';
-      let intent = 'conversation';
-      let completed = false;
+      const reader = response.body.getReader(); const decoder = new TextDecoder();
+      let buffer = ''; let accumulated = ''; let intent = 'conversation'; let completed = false;
       const processEvent = (rawData: string) => {
         const data = JSON.parse(rawData) as { type?: string; value?: string; reply?: string; message?: string };
         if (data.type === 'intent' && typeof data.value === 'string') intent = data.value;
@@ -102,14 +88,9 @@ export default function Home() {
     if (!lastQuery || aiLoading) return;
     await handleRunQuery(`${question} My original journey request was: "${lastQuery}"`);
   };
-
-  const handleContextSave = (nextContext: JourneyContext) => {
-    setJourneyContext(nextContext);
-  };
-
+  const handleContextSave = (nextContext: JourneyContext) => setJourneyContext(nextContext);
   const handleLogout = () => { clearAuth(); router.push('/login'); };
   const handleToggleTheme = () => { if (theme === 'light') setTheme('dark'); else if (theme === 'dark') setTheme('auto'); else setTheme('light'); };
-  const route = extractRoute(lastQuery);
   const conversationStatus = aiLoading ? 'streaming' : aiResponse?.parsed_intent === 'system_error' ? 'error' : aiResponse ? 'ready' : 'idle';
 
   return (
@@ -120,7 +101,7 @@ export default function Home() {
         <JourneyComposer onSubmit={handleRunQuery} />
         {(aiResponse || aiLoading) && <ConversationShell userQuery={lastQuery} aiReply={aiResponse?.reply} status={conversationStatus} conversationId={conversationId} contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : undefined} />}
         {(aiResponse || aiLoading) && <JourneyContextCard context={journeyContext} onSave={handleContextSave} />}
-        {aiResponse && <><JourneyDecisionWorkspace data={{ origin: journeyContext.origin, destination: journeyContext.destination, analysis: aiResponse.reply, verification: { status: 'estimated' } }} /><JourneyAskAI contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : 'this journey'} onAsk={handleAskAboutJourney} disabled={aiLoading} /></>}
+        {aiResponse && <><JourneyDecisionWorkspace data={{ origin: journeyContext.origin ?? undefined, destination: journeyContext.destination ?? undefined, analysis: aiResponse.reply, verification: { status: 'estimated' } }} /><JourneyAskAI contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : 'this journey'} onAsk={handleAskAboutJourney} disabled={aiLoading} /></>}
         {aiLoading && !aiResponse ? <JourneyDecisionWorkspace data={null} loading /> : null}
         <RecentJourneys /><HomeIntelligence />
       </main>
