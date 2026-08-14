@@ -1,0 +1,1 @@
+Temporary files created during UI-06B implementation should be removed before merge.
