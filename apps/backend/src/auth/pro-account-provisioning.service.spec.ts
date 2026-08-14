@@ -39,6 +39,7 @@ describe('ProAccountProvisioningService', () => {
 
   const prisma: ProvisioningPrismaMock = {
     user: {
+      // Return real promises without async/await so strict lint stays clean.
       findUnique: () => Promise.resolve(existingUser),
       create: (args: unknown) => {
         userCreateCalls += 1;
