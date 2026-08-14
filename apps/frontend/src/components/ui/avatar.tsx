@@ -1,5 +1,4 @@
 import * as React from 'react';
-import Image from 'next/image';
 import { cn } from '@/lib/cn';
 
 export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -20,15 +19,10 @@ export function Avatar({ className, src, alt = '', fallback = '?', ...props }: A
       {...props}
     >
       {src && !failed ? (
-        <Image
-          src={src}
-          alt={alt}
-          fill
-          sizes="40px"
-          unoptimized
-          className="object-cover"
-          onError={() => setFailed(true)}
-        />
+        // Avatar accepts user/provider URLs, so Next Image remote-host configuration
+        // would unnecessarily couple this primitive to deployment configuration.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} className="h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : (
         <span aria-hidden="true">{fallback.slice(0, 2).toUpperCase()}</span>
       )}
