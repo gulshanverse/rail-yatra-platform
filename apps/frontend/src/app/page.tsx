@@ -86,12 +86,8 @@ export default function Home() {
       buffer += decoder.decode(); const [finalEvents] = parseSSEBuffer(buffer); for (const event of finalEvents) processEvent(event.data);
       if (!completed && !accumulated.trim()) throw new Error('Empty AI response');
     } catch (error) {
-      if (controller.signal.aborted) {
-        setResponseStopped(true);
-        return;
-      }
-      console.error('Error fetching AI decision response:', error);
-      setStreamError(true);
+      if (controller.signal.aborted) { setResponseStopped(true); return; }
+      console.error('Error fetching AI decision response:', error); setStreamError(true);
       setAiResponse((current) => current ?? { reply: 'RailYatra AI could not finish this response.', parsed_intent: 'system_error', explanation: 'Your conversation was preserved. Retry to continue the same conversation.' });
     } finally {
       if (streamAbortRef.current === controller) streamAbortRef.current = null;
@@ -101,10 +97,7 @@ export default function Home() {
 
   const handleRetry = () => { if (lastQuery && !aiLoading) void handleRunQuery(lastQuery, { retry: true }); };
   const handleStop = () => streamAbortRef.current?.abort();
-  const handleAskAboutJourney = async (question: string) => {
-    if (!lastQuery || aiLoading) return;
-    await handleRunQuery(`${question} My original journey request was: "${lastQuery}"`);
-  };
+  const handleAskAboutJourney = async (question: string) => { if (!lastQuery || aiLoading) return; await handleRunQuery(`${question} My original journey request was: "${lastQuery}"`); };
   const handleContextSave = (nextContext: JourneyContext) => setJourneyContext(nextContext);
   const handleLogout = () => { streamAbortRef.current?.abort(); clearAuth(); router.push('/login'); };
   const handleToggleTheme = () => { if (theme === 'light') setTheme('dark'); else if (theme === 'dark') setTheme('auto'); else setTheme('light'); };
@@ -116,7 +109,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-7 sm:px-6 lg:py-12">
         <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{user ? `Welcome back, ${user.fullName.split(' ')[0]}` : 'Travel intelligence'}</p></div><HomeTrustStatus /></div>
         <JourneyComposer onSubmit={handleRunQuery} />
-        {(aiResponse || aiLoading) && <ConversationShell userQuery={lastQuery} aiReply={aiResponse?.reply} status={conversationStatus} conversationId={conversationId} contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : undefined} onRetry={handleRetry} onStop={handleStop} />}
+        {(aiResponse || aiLoading) && <ConversationShell userQuery={lastQuery} aiReply={aiResponse?.reply} status={conversationStatus} conversationId={conversationId} contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : undefined} onRetry={handleRetry} onStop={handleStop} onFollowUp={handleAskAboutJourney} />}
         {(aiResponse || aiLoading) && <JourneyContextCard context={journeyContext} onSave={handleContextSave} />}
         {aiResponse && <><JourneyDecisionWorkspace data={{ origin: journeyContext.origin ?? undefined, destination: journeyContext.destination ?? undefined, analysis: aiResponse.reply, verification: { status: 'estimated' } }} /><JourneyAskAI contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : 'this journey'} onAsk={handleAskAboutJourney} disabled={aiLoading} /></>}
         {aiLoading && !aiResponse ? <JourneyDecisionWorkspace data={null} loading /> : null}
