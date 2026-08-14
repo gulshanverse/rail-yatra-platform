@@ -16,13 +16,11 @@ export class FeatureGateService {
       `Checking entitlements for user ${userId}, action: ${action}`,
     );
 
-    // 1. Fetch user subscription details (fallback to FREE default)
     let sub = await this.prisma.subscription.findFirst({
       where: { userId, status: 'active' },
     });
 
     if (!sub) {
-      // Auto-initialize FREE subscription on first check
       sub = await this.prisma.subscription.create({
         data: {
           userId,
@@ -34,9 +32,7 @@ export class FeatureGateService {
 
     const plan = SUBSCRIPTION_PLANS[sub.tier] || SUBSCRIPTION_PLANS.FREE;
 
-    // 2. Perform capacity evaluations based on active action type
     if (action === 'ai_message') {
-      // Evaluate daily message limits
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const usedToday = await this.prisma.usageLog.count({
         where: { userId, action: 'ai_message', timestamp: { gte: yesterday } },
@@ -48,14 +44,19 @@ export class FeatureGateService {
     }
 
     if (action === 'journey_analysis') {
-      // Monthly credits-based check
+      // PREMIUM_PLUS is the platform's unlimited-credit tier. Keep the stored
+      // 9999 value for backwards compatibility with existing subscriptions,
+      // but never consume or exhaust it in the entitlement path.
+      if (sub.tier === 'PREMIUM_PLUS') {
+        return { allowed: true, remaining: -1, limit: -1 };
+      }
+
       const remaining = sub.credits;
       const limit = plan.monthlyCredits;
       return { allowed: remaining > 0, remaining, limit };
     }
 
     if (action === 'pnr_check') {
-      // Limit of active monitoring histories
       const activePnrs = await this.prisma.pnrHistory.count({
         where: { userId },
       });
@@ -65,7 +66,6 @@ export class FeatureGateService {
     }
 
     if (action === 'save_route') {
-      // Limit of active saved junctions
       const savedRoutes = await this.prisma.savedRoute.count({
         where: { userId },
       });
@@ -80,16 +80,19 @@ export class FeatureGateService {
   async logUsage(userId: string, action: string): Promise<void> {
     this.logger.log(`Logging usage: user ${userId}, action: ${action}`);
 
-    // Write usage record
     await this.prisma.usageLog.create({
       data: { userId, action },
     });
 
-    // If journey analysis is used, decrement subscription monthly credits
     if (action === 'journey_analysis') {
       const activeSub = await this.prisma.subscription.findFirst({
         where: { userId, status: 'active' },
       });
+
+      // Unlimited PRO subscriptions retain their sentinel credit value.
+      if (activeSub?.tier === 'PREMIUM_PLUS') {
+        return;
+      }
 
       if (activeSub && activeSub.credits > 0) {
         await this.prisma.subscription.update({
