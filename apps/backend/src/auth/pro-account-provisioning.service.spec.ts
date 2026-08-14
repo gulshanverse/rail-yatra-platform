@@ -2,6 +2,21 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service';
 import { ProAccountProvisioningService } from './pro-account-provisioning.service';
 
+type CreatedSubscriptionData = {
+  tier: string;
+  status: string;
+  credits: number;
+};
+
+type CreatedUserData = {
+  email: string;
+  role: string;
+  passwordHash: string;
+  subscriptions: {
+    create: CreatedSubscriptionData;
+  };
+};
+
 type ProvisioningPrismaMock = {
   user: {
     findUnique: (args: unknown) => Promise<unknown>;
@@ -12,13 +27,6 @@ type ProvisioningPrismaMock = {
     update: (args: unknown) => Promise<unknown>;
     create: (args: unknown) => Promise<unknown>;
   };
-};
-
-type CreatedUserData = {
-  email?: unknown;
-  role?: unknown;
-  passwordHash?: unknown;
-  subscriptions?: unknown;
 };
 
 describe('ProAccountProvisioningService', () => {
@@ -91,9 +99,9 @@ describe('ProAccountProvisioningService', () => {
       }),
     );
 
-    const passwordHash = createdData?.passwordHash;
+    const passwordHash: string | undefined = createdData?.passwordHash;
     expect(typeof passwordHash).toBe('string');
-    if (typeof passwordHash !== 'string') return;
+    if (passwordHash === undefined) return;
 
     await expect(
       bcrypt.compare('a-strong-production-password', passwordHash),
