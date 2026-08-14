@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { API_BASE_URL, authenticatedFetch } from '../lib/api';
 import { parseSSEBuffer } from '../lib/sse';
 import MarkdownMessage from '../components/MarkdownMessage';
-import { JourneyDecisionWorkspace } from '../components/journey';
+import { JourneyAskAI, JourneyDecisionWorkspace } from '../components/journey';
 import { HomeIntelligence, HomeTrustStatus, JourneyComposer, RecentJourneys } from '../components/home';
 
 interface AIResponse {
@@ -149,6 +149,11 @@ export default function Home() {
     }
   };
 
+  const handleAskAboutJourney = async (question: string) => {
+    if (!lastQuery || aiLoading) return;
+    await handleRunQuery(`${question} My original journey request was: "${lastQuery}"`);
+  };
+
   const handleLogout = () => {
     clearAuth();
     router.push('/login');
@@ -199,6 +204,11 @@ export default function Home() {
                 analysis: aiResponse.reply,
                 verification: { status: 'estimated' },
               }}
+            />
+            <JourneyAskAI
+              contextLabel={route.origin && route.destination ? `${route.origin} → ${route.destination}` : 'this journey'}
+              onAsk={handleAskAboutJourney}
+              disabled={aiLoading}
             />
             <section className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/50 shadow-[0_20px_70px_rgba(0,0,0,0.16)]" aria-live="polite">
               <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sm:px-6"><div className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-400/10 text-indigo-300"><CheckCircle2 className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Full AI analysis</p><p className="text-[11px] text-slate-500">Conversation context preserved</p></div></div><span className="rounded-full border border-emerald-400/15 bg-emerald-400/5 px-2.5 py-1 text-[11px] font-medium text-emerald-300">{aiResponse.parsed_intent}</span></div>
