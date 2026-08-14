@@ -39,10 +39,6 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   React.useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -55,6 +51,8 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
 
   if (!showSidebar) return <>{children}</>;
 
+  const closeMobileNavigation = () => setMobileOpen(false);
+
   const renderNav = (items: typeof NAV_ITEMS) => (
     <nav className="space-y-1" aria-label="Primary navigation">
       {items.map(({ href, label, icon: Icon }) => {
@@ -63,6 +61,7 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
           <Link
             key={href}
             href={href}
+            onClick={closeMobileNavigation}
             aria-current={active ? 'page' : undefined}
             title={collapsed ? label : undefined}
             className={cn(
@@ -92,7 +91,7 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
       )}
     >
       <div className="flex h-16 items-center justify-between border-b border-border px-4">
-        <Link href="/" className={cn('flex min-w-0 items-center gap-2.5', collapsed && 'justify-center w-full')} aria-label="RailYatra home">
+        <Link href="/" onClick={closeMobileNavigation} className={cn('flex min-w-0 items-center gap-2.5', collapsed && 'justify-center w-full')} aria-label="RailYatra home">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-card">
             <span className="text-sm font-bold">R</span>
           </div>
@@ -127,7 +126,7 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
       </div>
 
       <div className="border-t border-border p-3">
-        <Link href="/settings" className={cn('flex min-h-11 items-center gap-3 rounded-md p-2 hover:bg-interactive', collapsed && 'justify-center')}>
+        <Link href="/settings" onClick={closeMobileNavigation} className={cn('flex min-h-11 items-center gap-3 rounded-md p-2 hover:bg-interactive', collapsed && 'justify-center')}>
           <Avatar fallback={user?.fullName || user?.email || 'RY'} className="h-8 w-8" />
           {!collapsed && (
             <div className="min-w-0 flex-1">
@@ -146,7 +145,7 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          <button className="absolute inset-0 bg-black/50" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
+          <button className="absolute inset-0 bg-black/50" aria-label="Close navigation" onClick={closeMobileNavigation} />
           <div className="relative h-full w-[min(86vw,320px)] shadow-elevated">{sidebar}</div>
         </div>
       )}
@@ -169,7 +168,7 @@ export function AppShell({ children, title, showSidebar = true }: AppShellProps)
             <kbd className="rounded border border-border bg-interactive px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
           </button>
           <div className="ml-3 md:hidden">
-            <IconButton label="Close navigation" variant="ghost" onClick={() => setMobileOpen(false)} className="hidden">
+            <IconButton label="Close navigation" variant="ghost" onClick={closeMobileNavigation} className="hidden">
               <X className="h-5 w-5" />
             </IconButton>
           </div>
