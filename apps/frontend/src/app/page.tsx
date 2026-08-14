@@ -45,6 +45,17 @@ export default function Home() {
     return data.id;
   };
 
+  const sendDecisionMessage = async (id: string, message: string) => {
+    return authenticatedFetch(`${API_BASE_URL}/api/conversations/${id}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        context: { current_page: '/', surface: 'decision-engine' },
+      }),
+    });
+  };
+
   const handleLogout = () => {
     clearAuth();
     router.push('/login');
@@ -59,23 +70,29 @@ export default function Home() {
 
     setAiLoading(true);
     setAiResponse(null);
-    if (credits > 0) setCredits(prev => prev - 1);
 
     try {
-      // Resolve the conversation at submit time. This avoids effect-driven state
-      // synchronization while still restoring the same conversation after refresh.
-      const storedConversationId = sessionStorage.getItem(conversationStorageKey);
-      const activeConversationId = conversationId ?? storedConversationId ?? await createDecisionConversation(userQuery);
-      if (activeConversationId !== conversationId) setConversationId(activeConversationId);
+      // Resolve the conversation at submit time. A session can outlive a backend
+      // deployment, so the stored ID may point to a deleted conversation.
+      let activeConversationId = conversationId ?? sessionStorage.getItem(conversationStorageKey);
+      let response: Response;
 
-      const response = await authenticatedFetch(`${API_BASE_URL}/api/conversations/${activeConversationId}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userQuery,
-          context: { current_page: '/', surface: 'decision-engine' },
-        }),
-      });
+      if (activeConversationId) {
+        response = await sendDecisionMessage(activeConversationId, userQuery);
+
+        // Recover automatically from a stale conversation ID instead of showing
+        // a generic AI outage to the user. This is especially important after
+        // database resets, deployments, or an expired browser session.
+        if (response.status === 404) {
+          sessionStorage.removeItem(conversationStorageKey);
+          setConversationId(null);
+          activeConversationId = await createDecisionConversation(userQuery);
+          response = await sendDecisionMessage(activeConversationId, userQuery);
+        }
+      } else {
+        activeConversationId = await createDecisionConversation(userQuery);
+        response = await sendDecisionMessage(activeConversationId, userQuery);
+      }
 
       if (!response.ok) throw new Error(`Decision Engine request failed (${response.status})`);
       if (!response.body) throw new Error('Readable stream not supported');
@@ -88,16 +105,33 @@ export default function Home() {
       let completed = false;
 
       const processEvent = (rawData: string) => {
-        const data = JSON.parse(rawData) as { type?: string; value?: string; reply?: string; message?: string };
+        const data = JSON.parse(rawData) as {
+          type?: string;
+          value?: string;
+          reply?: string;
+          message?: string;
+        };
         if (data.type === 'intent' && typeof data.value === 'string') intent = data.value;
         if (data.type === 'token' && typeof data.value === 'string') {
           accumulated += data.value;
-          setAiResponse({ reply: accumulated, parsed_intent: intent, confidence: 0, explanation: 'Orchestrated by the RailYatra AI decision engine.', credits_left: credits });
+          setAiResponse({
+            reply: accumulated,
+            parsed_intent: intent,
+            confidence: 0,
+            explanation: 'Orchestrated by the RailYatra AI decision engine.',
+            credits_left: credits,
+          });
         }
         if (data.type === 'done') {
           completed = true;
           if (typeof data.reply === 'string') accumulated = data.reply;
-          setAiResponse({ reply: accumulated, parsed_intent: intent, confidence: 0, explanation: 'Orchestrated by the RailYatra AI decision engine.', credits_left: credits });
+          setAiResponse({
+            reply: accumulated,
+            parsed_intent: intent,
+            confidence: 0,
+            explanation: 'Orchestrated by the RailYatra AI decision engine.',
+            credits_left: credits,
+          });
         }
         if (data.type === 'error') throw new Error(data.message || 'AI stream failed');
       };
@@ -113,7 +147,9 @@ export default function Home() {
       buffer += decoder.decode();
       const [finalEvents] = parseSSEBuffer(buffer);
       for (const event of finalEvents) processEvent(event.data);
+
       if (!completed && !accumulated.trim()) throw new Error('Empty AI response');
+      if (credits > 0) setCredits(prev => Math.max(0, prev - 1));
     } catch (err) {
       console.error('Error fetching AI decision response:', err);
       setAiResponse({
