@@ -104,24 +104,33 @@ export class ConversationsController {
       throw new UnauthorizedException('Access denied for this conversation');
     }
 
-    await this.prisma.chatMessage.create({
-      data: { conversationId: id, role: 'user', content: body.message },
-    });
-
-    const aiServiceUrl = process.env.AI_SERVICE_URL?.trim();
-    if (!aiServiceUrl) {
-      throw new InternalServerErrorException(
-        'AI Core service is not configured. Set AI_SERVICE_URL on the backend deployment.',
-      );
+    const message = body.message?.trim();
+    if (!message) {
+      return res.status(400).json({
+        statusCode: 400,
+        code: 'EMPTY_MESSAGE',
+        message: 'Message cannot be empty.',
+      });
     }
 
+    const aiServiceUrl = process.env.AI_SERVICE_URL?.trim().replace(/\/$/, '');
+    if (!aiServiceUrl) {
+      throw new InternalServerErrorException({
+        code: 'AI_SERVICE_NOT_CONFIGURED',
+        message: 'AI Core service is not configured on the backend deployment.',
+      });
+    }
+
+    // Do not persist a user message until the upstream AI service has accepted
+    // the request. This prevents failed requests from polluting conversation history.
     let fastapiResponse: Response;
     try {
-      fastapiResponse = await fetch(`${aiServiceUrl.replace(/\/$/, '')}/chat/stream`, {
+      fastapiResponse = await fetch(`${aiServiceUrl}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000),
         body: JSON.stringify({
-          message: body.message,
+          message,
           conversation_id: id,
           user_id: req.user.id,
           context: body.context,
@@ -129,25 +138,40 @@ export class ConversationsController {
       });
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      throw new InternalServerErrorException(
-        `AI Core service is currently offline or unreachable: ${errMsg}`,
-      );
+      console.error(`AI Core connection failed for conversation ${id}: ${errMsg}`);
+      return res.status(502).json({
+        statusCode: 502,
+        code: 'AI_SERVICE_UNREACHABLE',
+        message: 'RailYatra AI Core is unreachable. Please try again shortly.',
+      });
     }
 
     if (!fastapiResponse.ok) {
-      const errorText = await fastapiResponse.text().catch(() => 'Unknown upstream error');
-      console.error(`AI Service returned error ${fastapiResponse.status}: ${errorText}`);
-      res.status(fastapiResponse.status).json({
-        statusCode: fastapiResponse.status,
-        message: `AI Service error (${fastapiResponse.status}): ${errorText}`,
-        error: fastapiResponse.status >= 500 ? 'Bad Gateway' : 'Bad Request',
+      const upstreamText = await fastapiResponse.text().catch(() => 'Unknown upstream error');
+      console.error(`AI Service returned ${fastapiResponse.status}: ${upstreamText}`);
+      const clientStatus = fastapiResponse.status >= 500 ? 502 : fastapiResponse.status;
+      return res.status(clientStatus).json({
+        statusCode: clientStatus,
+        code: fastapiResponse.status >= 500 ? 'AI_SERVICE_UPSTREAM_ERROR' : 'AI_REQUEST_REJECTED',
+        message:
+          fastapiResponse.status >= 500
+            ? 'RailYatra AI Core failed while processing the request.'
+            : 'RailYatra AI Core rejected the request.',
+        upstreamStatus: fastapiResponse.status,
       });
-      return;
     }
 
     if (!fastapiResponse.body) {
-      throw new InternalServerErrorException('AI stream body not returned');
+      return res.status(502).json({
+        statusCode: 502,
+        code: 'AI_STREAM_UNAVAILABLE',
+        message: 'RailYatra AI Core did not return a stream.',
+      });
     }
+
+    await this.prisma.chatMessage.create({
+      data: { conversationId: id, role: 'user', content: message },
+    });
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -159,6 +183,7 @@ export class ConversationsController {
     let buffer = '';
     let assistantReply = '';
     let streamClosed = false;
+    let sawError = false;
 
     const closeOnDisconnect = () => {
       if (!streamClosed) {
@@ -178,15 +203,20 @@ export class ConversationsController {
         buffer = remainder;
 
         for (const sseEvent of events) {
-          res.write(`data: ${sseEvent.data}\n\n`);
-
           try {
             const data = JSON.parse(sseEvent.data) as {
               type?: string;
               value?: string;
               reply?: string;
+              message?: string;
+              code?: string;
             };
-            if (data.type === 'token' && typeof data.value === 'string') {
+            if (data.type === 'error') {
+              sawError = true;
+              console.error(
+                `AI stream error conversation=${id} code=${data.code ?? 'UNKNOWN'} message=${data.message ?? 'unknown'}`,
+              );
+            } else if (data.type === 'token' && typeof data.value === 'string') {
               assistantReply += data.value;
             } else if (
               data.type === 'done' &&
@@ -198,17 +228,32 @@ export class ConversationsController {
           } catch {
             console.warn('Ignoring malformed upstream SSE event');
           }
+          res.write(`data: ${sseEvent.data}\n\n`);
         }
       }
 
       buffer += decoder.decode();
+      const [finalEvents] = parseSSEBuffer(buffer);
+      for (const sseEvent of finalEvents) {
+        res.write(`data: ${sseEvent.data}\n\n`);
+      }
     } catch (streamError) {
-      if (!streamClosed) console.error('Error during streaming read:', streamError);
+      if (!streamClosed) {
+        sawError = true;
+        console.error('Error during AI stream:', streamError);
+        res.write(
+          `data: ${JSON.stringify({
+            type: 'error',
+            code: 'AI_STREAM_READ_ERROR',
+            message: 'The AI response stream ended unexpectedly.',
+          })}\n\n`,
+        );
+      }
     } finally {
       res.off('close', closeOnDisconnect);
     }
 
-    if (!streamClosed && assistantReply.trim()) {
+    if (!streamClosed && !sawError && assistantReply.trim()) {
       await this.prisma.chatMessage.create({
         data: { conversationId: id, role: 'assistant', content: assistantReply },
       });
