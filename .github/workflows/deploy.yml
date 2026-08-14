@@ -60,21 +60,38 @@ jobs:
           cd apps/ai-service
           PYTHONPATH=. pytest
 
-      - name: Verify Staging / Production Health Checks
+      - name: Verify Production Backend
+        env:
+          BACKEND_URL: https://rail-yatra-backend.onrender.com
         run: |
-          echo "GitHub Integration triggers automatic build & deploy on Vercel and Railway."
-          echo "Polling health check endpoints to verify successful auto-deployment..."
-          
-          # Target URLs determined by branch
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            BACKEND_URL="https://rail-yatra-backend-production.up.railway.app"
-            AI_URL="https://rail-yatra-ai-service-production.up.railway.app"
-          else
-            BACKEND_URL="https://rail-yatra-backend-staging.up.railway.app"
-            AI_URL="https://rail-yatra-ai-service-staging.up.railway.app"
-          fi
-          
-          echo "Verifying backend liveness at $BACKEND_URL..."
-          # Poll backend live check with timeout (e.g. wait up to 10 seconds for standard checks, or longer if a cold build is deploying)
-          # We skip full blocker here to avoid breaking CI if the user hasn't linked the Railway project yet, but output diagnostic details
-          curl -I -s --max-time 5 "$BACKEND_URL/api/health/live" || echo "Backend staging/prod URL not reachable yet."
+          set -euo pipefail
+          echo "Checking backend liveness at ${BACKEND_URL}/api/health/live"
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --max-time 10 "${BACKEND_URL}/api/health/live"; then
+              echo
+              echo "Backend production health check passed."
+              exit 0
+            fi
+            echo "Backend not ready yet (attempt ${attempt}/12); waiting 10s..."
+            sleep 10
+          done
+          echo "Backend production health check failed."
+          exit 1
+
+      - name: Verify Production AI Service
+        env:
+          AI_URL: https://railyatra-ai-service.onrender.com
+        run: |
+          set -euo pipefail
+          echo "Checking AI service health at ${AI_URL}/health"
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --max-time 10 "${AI_URL}/health"; then
+              echo
+              echo "AI service production health check passed."
+              exit 0
+            fi
+            echo "AI service not ready yet (attempt ${attempt}/12); waiting 10s..."
+            sleep 10
+          done
+          echo "AI service production health check failed."
+          exit 1

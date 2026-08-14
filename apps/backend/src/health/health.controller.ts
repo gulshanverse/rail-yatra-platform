@@ -11,9 +11,7 @@ function checkTcpConnection(
   return new Promise((resolve) => {
     const socket = new Socket();
     let connResolved = false;
-
     socket.setTimeout(timeoutMs);
-
     socket.connect(port, host, () => {
       if (!connResolved) {
         connResolved = true;
@@ -21,7 +19,6 @@ function checkTcpConnection(
         resolve(true);
       }
     });
-
     const handleFail = () => {
       if (!connResolved) {
         connResolved = true;
@@ -29,20 +26,13 @@ function checkTcpConnection(
         resolve(false);
       }
     };
-
     socket.on('error', handleFail);
     socket.on('timeout', handleFail);
   });
 }
 
-/**
- * Resolves Redis host and port from environment variables.
- * Prioritises REDIS_URL (as provided by Railway and most managed Redis providers).
- * Falls back to REDIS_HOST / REDIS_PORT only when REDIS_URL is absent.
- */
 function resolveRedisHostPort(): { host: string; port: number } {
   const redisUrl = process.env.REDIS_URL;
-
   if (redisUrl) {
     try {
       const parsed = new URL(redisUrl);
@@ -51,7 +41,6 @@ function resolveRedisHostPort(): { host: string; port: number } {
         port: parsed.port ? parseInt(parsed.port, 10) : 6379,
       };
     } catch {
-      // URL constructor can fail on some redis:// or rediss:// URIs – fall back to regex
       const match = redisUrl.match(
         /rediss?:\/\/(?:[^:]*:(?:[^@]*)@)?([^:/\s]+)(?::(\d+))?/,
       );
@@ -63,8 +52,6 @@ function resolveRedisHostPort(): { host: string; port: number } {
       }
     }
   }
-
-  // Fallback: individual host/port env vars (local development)
   return {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
@@ -87,7 +74,6 @@ export class HealthController {
     let dbHealthy = false;
     let redisHealthy = false;
 
-    // --- Required: PostgreSQL ---
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       dbHealthy = true;
@@ -95,12 +81,10 @@ export class HealthController {
       dbHealthy = false;
     }
 
-    // --- Required: Redis ---
     const { host: redisHost, port: redisPort } = resolveRedisHostPort();
     redisHealthy = await checkTcpConnection(redisHost, redisPort);
 
-    // --- Optional: AI Service (informational, not a gate) ---
-    const aiServiceUrl = process.env.AI_SERVICE_URL;
+    const aiServiceUrl = process.env.AI_SERVICE_URL?.trim().replace(/\/$/, '');
     let aiStatus: string;
 
     if (!aiServiceUrl) {
@@ -109,6 +93,7 @@ export class HealthController {
       try {
         const response = await fetch(`${aiServiceUrl}/health`, {
           method: 'GET',
+          signal: AbortSignal.timeout(3000),
         });
         aiStatus = response.ok ? 'healthy' : 'failed';
       } catch {
@@ -116,8 +101,8 @@ export class HealthController {
       }
     }
 
-    // Readiness gates on required infrastructure only
-    const isReady = dbHealthy && redisHealthy;
+    const aiRequired = Boolean(aiServiceUrl);
+    const isReady = dbHealthy && redisHealthy && (!aiRequired || aiStatus === 'healthy');
 
     if (isReady) {
       return res.status(HttpStatus.OK).json({
@@ -128,21 +113,20 @@ export class HealthController {
           ai_service: aiStatus,
         },
       });
-    } else {
-      return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
-        status: 'unready',
-        components: {
-          database: dbHealthy ? 'healthy' : 'failed',
-          redis: redisHealthy ? 'healthy' : 'failed',
-          ai_service: aiStatus,
-        },
-      });
     }
+
+    return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+      status: 'unready',
+      components: {
+        database: dbHealthy ? 'healthy' : 'failed',
+        redis: redisHealthy ? 'healthy' : 'failed',
+        ai_service: aiStatus,
+      },
+    });
   }
 
   @Get()
   async getHealth(@Res() res: Response) {
-    // --- Database ---
     let dbStatus = 'healthy';
     let dbLatency = 0;
     const startDb = Date.now();
@@ -153,10 +137,9 @@ export class HealthController {
       dbStatus = 'unreachable';
     }
 
-    // --- AI Service (optional) ---
     let aiStatus: string;
     let aiLatency = 0;
-    const aiServiceUrl = process.env.AI_SERVICE_URL;
+    const aiServiceUrl = process.env.AI_SERVICE_URL?.trim().replace(/\/$/, '');
 
     if (!aiServiceUrl) {
       aiStatus = 'not_configured';
@@ -165,6 +148,7 @@ export class HealthController {
       try {
         const response = await fetch(`${aiServiceUrl}/health`, {
           method: 'GET',
+          signal: AbortSignal.timeout(3000),
         });
         if (response.ok) {
           aiLatency = Date.now() - startAi;
@@ -177,13 +161,11 @@ export class HealthController {
       }
     }
 
-    // --- Redis ---
     const { host: redisHost, port: redisPort } = resolveRedisHostPort();
     const startRedis = Date.now();
     const isRedisUp = await checkTcpConnection(redisHost, redisPort);
     const redisLatency = Date.now() - startRedis;
 
-    // --- Qdrant (optional) ---
     let qdrantStatus: string;
     let qdrantLatency = 0;
     const qdrantHost = process.env.QDRANT_HOST;
@@ -200,12 +182,10 @@ export class HealthController {
       qdrantStatus = isQdrantUp ? 'healthy' : 'unreachable';
     }
 
-    // Overall health considers only services that are actually configured.
-    // Required: database + redis.  Optional: ai_service, qdrant.
     const requiredHealthy = dbStatus === 'healthy' && isRedisUp;
-    const aiHealthy = aiStatus === 'not_configured' || aiStatus === 'healthy';
-    const qdrantHealthy =
-      qdrantStatus === 'not_configured' || qdrantStatus === 'healthy';
+    const aiRequired = Boolean(aiServiceUrl);
+    const aiHealthy = !aiRequired || aiStatus === 'healthy';
+    const qdrantHealthy = qdrantStatus === 'not_configured' || qdrantStatus === 'healthy';
     const isAllHealthy = requiredHealthy && aiHealthy && qdrantHealthy;
 
     return res.status(HttpStatus.OK).json({
