@@ -14,33 +14,41 @@ type ProvisioningPrismaMock = {
   };
 };
 
+type CreatedUserData = {
+  email?: unknown;
+  role?: unknown;
+  passwordHash?: unknown;
+  subscriptions?: unknown;
+};
+
 describe('ProAccountProvisioningService', () => {
   const originalEnv = process.env;
   let existingUser: unknown = null;
-  let createdData: Record<string, unknown> | undefined;
+  let createdData: CreatedUserData | undefined;
   let userCreateCalls = 0;
   let userUpdateCalls = 0;
   let subscriptionUpdateCalls = 0;
 
   const prisma: ProvisioningPrismaMock = {
     user: {
-      findUnique: async () => existingUser,
-      create: async (args: unknown) => {
+      findUnique: () => Promise.resolve(existingUser),
+      create: (args: unknown) => {
         userCreateCalls += 1;
-        createdData = (args as { data: Record<string, unknown> }).data;
-        return { id: 'admin-1' };
+        const typedArgs = args as { data: CreatedUserData };
+        createdData = typedArgs.data;
+        return Promise.resolve({ id: 'admin-1' });
       },
-      update: async () => {
+      update: () => {
         userUpdateCalls += 1;
-        return { id: 'admin-1' };
+        return Promise.resolve({ id: 'admin-1' });
       },
     },
     subscription: {
-      update: async () => {
+      update: () => {
         subscriptionUpdateCalls += 1;
-        return { id: 'sub-1' };
+        return Promise.resolve({ id: 'sub-1' });
       },
-      create: async () => ({ id: 'sub-1' }),
+      create: () => Promise.resolve({ id: 'sub-1' }),
     },
   };
 
