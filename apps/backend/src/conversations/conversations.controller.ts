@@ -121,6 +121,14 @@ export class ConversationsController {
       });
     }
 
+    // The AI workflow itself has a 45s timeout. Keep the upstream fetch alive
+    // longer than that so the backend does not abort a valid SSE response while
+    // the AI service is still executing the workflow (especially after a cold start).
+    const configuredTimeout = Number.parseInt(process.env.AI_SERVICE_TIMEOUT_MS ?? '65000', 10);
+    const aiServiceTimeoutMs = Number.isFinite(configuredTimeout)
+      ? Math.min(Math.max(configuredTimeout, 10000), 120000)
+      : 65000;
+
     // Do not persist a user message until the upstream AI service has accepted
     // the request. This prevents failed requests from polluting conversation history.
     let fastapiResponse: Response;
@@ -128,7 +136,7 @@ export class ConversationsController {
       fastapiResponse = await fetch(`${aiServiceUrl}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(aiServiceTimeoutMs),
         body: JSON.stringify({
           message,
           conversation_id: id,
