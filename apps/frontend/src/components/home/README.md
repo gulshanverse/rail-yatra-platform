@@ -1,1 +1,0 @@
-UI-03 home components. See the focused PR for integration details.
