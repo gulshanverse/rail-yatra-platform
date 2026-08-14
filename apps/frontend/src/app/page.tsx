@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, LogOut, Moon, Sun, Train } from 'lucide-react';
+import { LogOut, Moon, Sun, Train } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE_URL, authenticatedFetch } from '../lib/api';
 import { parseSSEBuffer } from '../lib/sse';
-import MarkdownMessage from '../components/MarkdownMessage';
 import { JourneyAskAI, JourneyDecisionWorkspace } from '../components/journey';
+import { ConversationShell } from '../components/conversation';
 import { HomeIntelligence, HomeTrustStatus, JourneyComposer, RecentJourneys } from '../components/home';
 
 interface AIResponse {
@@ -95,30 +95,16 @@ export default function Home() {
       let completed = false;
 
       const processEvent = (rawData: string) => {
-        const data = JSON.parse(rawData) as {
-          type?: string;
-          value?: string;
-          reply?: string;
-          message?: string;
-        };
-
+        const data = JSON.parse(rawData) as { type?: string; value?: string; reply?: string; message?: string };
         if (data.type === 'intent' && typeof data.value === 'string') intent = data.value;
         if (data.type === 'token' && typeof data.value === 'string') {
           accumulated += data.value;
-          setAiResponse({
-            reply: accumulated,
-            parsed_intent: intent,
-            explanation: 'Orchestrated by the RailYatra AI decision engine.',
-          });
+          setAiResponse({ reply: accumulated, parsed_intent: intent, explanation: 'Orchestrated by the RailYatra AI decision engine.' });
         }
         if (data.type === 'done') {
           completed = true;
           if (typeof data.reply === 'string') accumulated = data.reply;
-          setAiResponse({
-            reply: accumulated,
-            parsed_intent: intent,
-            explanation: 'Orchestrated by the RailYatra AI decision engine.',
-          });
+          setAiResponse({ reply: accumulated, parsed_intent: intent, explanation: 'Orchestrated by the RailYatra AI decision engine.' });
         }
         if (data.type === 'error') throw new Error(data.message || 'AI stream failed');
       };
@@ -135,7 +121,6 @@ export default function Home() {
       buffer += decoder.decode();
       const [finalEvents] = parseSSEBuffer(buffer);
       for (const event of finalEvents) processEvent(event.data);
-
       if (!completed && !accumulated.trim()) throw new Error('Empty AI response');
     } catch (error) {
       console.error('Error fetching AI decision response:', error);
@@ -166,6 +151,7 @@ export default function Home() {
   };
 
   const route = extractRoute(lastQuery);
+  const conversationStatus = aiLoading ? 'streaming' : aiResponse?.parsed_intent === 'system_error' ? 'error' : aiResponse ? 'ready' : 'idle';
 
   return (
     <div className="min-h-screen bg-[#070A12] text-white">
@@ -179,13 +165,7 @@ export default function Home() {
             <button type="button" onClick={handleToggleTheme} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60" aria-label="Change theme">
               {theme === 'light' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            {user && (
-              <div className="flex items-center gap-2.5 border-l border-white/10 pl-2.5 sm:pl-3">
-                <div className="hidden text-right sm:block"><p className="text-sm font-semibold text-white">{user.fullName}</p><p className="text-[11px] capitalize text-slate-500">{user.role.toLowerCase()} account</p></div>
-                <div className="grid h-9 w-9 place-items-center rounded-xl border border-indigo-300/20 bg-indigo-400/10 text-sm font-bold text-indigo-200">{user.fullName[0]?.toUpperCase()}</div>
-                <button type="button" onClick={handleLogout} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400 transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50" aria-label="Log out"><LogOut className="h-4 w-4" /></button>
-              </div>
-            )}
+            {user && <div className="flex items-center gap-2.5 border-l border-white/10 pl-2.5 sm:pl-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold text-white">{user.fullName}</p><p className="text-[11px] capitalize text-slate-500">{user.role.toLowerCase()} account</p></div><div className="grid h-9 w-9 place-items-center rounded-xl border border-indigo-300/20 bg-indigo-400/10 text-sm font-bold text-indigo-200">{user.fullName[0]?.toUpperCase()}</div><button type="button" onClick={handleLogout} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400 transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50" aria-label="Log out"><LogOut className="h-4 w-4" /></button></div>}
           </div>
         </div>
       </header>
@@ -195,31 +175,30 @@ export default function Home() {
 
         <JourneyComposer onSubmit={handleRunQuery} />
 
+        {(aiResponse || aiLoading) && (
+          <ConversationShell
+            userQuery={lastQuery}
+            aiReply={aiResponse?.reply}
+            status={conversationStatus}
+            conversationId={conversationId ?? (typeof window !== 'undefined' ? sessionStorage.getItem(conversationStorageKey) : null)}
+            contextLabel={route.origin && route.destination ? `${route.origin} → ${route.destination}` : undefined}
+          />
+        )}
+
         {aiResponse && (
           <>
             <JourneyDecisionWorkspace
-              data={{
-                origin: route.origin,
-                destination: route.destination,
-                analysis: aiResponse.reply,
-                verification: { status: 'estimated' },
-              }}
+              data={{ origin: route.origin, destination: route.destination, analysis: aiResponse.reply, verification: { status: 'estimated' } }}
             />
             <JourneyAskAI
               contextLabel={route.origin && route.destination ? `${route.origin} → ${route.destination}` : 'this journey'}
               onAsk={handleAskAboutJourney}
               disabled={aiLoading}
             />
-            <section className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/50 shadow-[0_20px_70px_rgba(0,0,0,0.16)]" aria-live="polite">
-              <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sm:px-6"><div className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-400/10 text-indigo-300"><CheckCircle2 className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Full AI analysis</p><p className="text-[11px] text-slate-500">Conversation context preserved</p></div></div><span className="rounded-full border border-emerald-400/15 bg-emerald-400/5 px-2.5 py-1 text-[11px] font-medium text-emerald-300">{aiResponse.parsed_intent}</span></div>
-              <div className="px-5 py-5 sm:px-6"><div className="prose prose-invert max-w-none text-sm leading-6 text-slate-200"><MarkdownMessage content={aiResponse.reply} /></div><p className="mt-5 text-xs text-slate-500">{aiResponse.explanation}</p></div>
-            </section>
           </>
         )}
 
-        {aiLoading && !aiResponse && (
-          <JourneyDecisionWorkspace data={null} loading />
-        )}
+        {aiLoading && !aiResponse ? <JourneyDecisionWorkspace data={null} loading /> : null}
 
         <RecentJourneys />
         <HomeIntelligence />
