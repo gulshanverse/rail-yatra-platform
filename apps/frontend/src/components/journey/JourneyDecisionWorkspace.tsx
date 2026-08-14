@@ -6,6 +6,7 @@ import { AIReasoningPanel } from './AIReasoningPanel';
 import { DecisionBadge } from './DecisionBadge';
 import { DecisionModeSelector, rankOptions, type DecisionMode } from './DecisionModeSelector';
 import { JourneyComparison } from './JourneyComparison';
+import { MobileDecisionBar } from './MobileDecisionBar';
 
 export type JourneyWorkspaceOption = {
   id: string;
@@ -89,7 +90,7 @@ export function JourneyDecisionWorkspace({ data, loading = false, error = null, 
   if (!data) return null;
 
   return (
-    <section className="space-y-5" aria-label="Journey decision workspace">
+    <section className="space-y-5 pb-24 sm:pb-0" aria-label="Journey decision workspace">
       <header className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">Journey decision</p><h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">{data.origin || 'Your journey'} <span className="mx-1 text-slate-500">→</span> {data.destination || 'Destination'}</h2><div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">{data.date ? <span className="rounded-full border border-white/10 px-3 py-1.5">{data.date}</span> : null}{data.passengers ? <span className="rounded-full border border-white/10 px-3 py-1.5">{data.passengers} passenger{data.passengers > 1 ? 's' : ''}</span> : null}{data.travelClass ? <span className="rounded-full border border-white/10 px-3 py-1.5">{data.travelClass}</span> : null}</div></div><DecisionBadge label={verificationCopy[verification]} tone={verificationTone[verification]} /></div>
         {data.verification?.updatedAt ? <p className="mt-3 text-[11px] text-slate-500">Data timestamp: {data.verification.updatedAt}</p> : null}
@@ -110,6 +111,7 @@ export function JourneyDecisionWorkspace({ data, loading = false, error = null, 
       {options.length > 0 ? <div><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-bold text-white">Journey options</h3><p className="mt-1 text-xs text-slate-500">Ranked for {modeLabels[decisionMode].toLowerCase()}. Select up to 3 options to compare.</p></div>{comparisonIds.length ? <DecisionBadge label={`${comparisonIds.length} selected`} tone="ai" /> : null}</div><div className="grid gap-3">{rankedOptions.filter((option) => option.id !== recommended?.id).map((option) => <JourneyOptionCard key={option.id} option={option} selectedForComparison={comparisonIds.includes(option.id)} onCompare={() => toggleComparison(option.id)} onSelect={() => onSelectOption?.(option)} />)}</div></div> : null}
       <JourneyComparison options={comparisonOptions} onRemove={(id) => toggleComparison(id)} />
       {error ? <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.05] px-4 py-3 text-sm text-amber-200">We received part of the journey analysis. {onRetry ? <button type="button" onClick={onRetry} className="ml-1 min-h-11 font-semibold underline underline-offset-4">Retry the remaining analysis</button> : null}</div> : null}
+      <MobileDecisionBar option={recommended} modeLabel={modeLabels[decisionMode]} onSelect={onSelectOption} />
     </section>
   );
 }
