@@ -1,8 +1,21 @@
 import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma.service';
 import { ProAccountProvisioningService } from './pro-account-provisioning.service';
 
+type ProvisioningPrismaMock = {
+  user: {
+    findUnique: jest.MockedFunction<(args: unknown) => Promise<unknown>>;
+    create: jest.MockedFunction<(args: unknown) => Promise<unknown>>;
+    update: jest.MockedFunction<(args: unknown) => Promise<unknown>>;
+  };
+  subscription: {
+    update: jest.MockedFunction<(args: unknown) => Promise<unknown>>;
+    create: jest.MockedFunction<(args: unknown) => Promise<unknown>>;
+  };
+};
+
 describe('ProAccountProvisioningService', () => {
-  const prisma = {
+  const prisma: ProvisioningPrismaMock = {
     user: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -12,9 +25,11 @@ describe('ProAccountProvisioningService', () => {
       update: jest.fn(),
       create: jest.fn(),
     },
-  } as never;
+  };
 
-  const service = new ProAccountProvisioningService(prisma);
+  const service = new ProAccountProvisioningService(
+    prisma as unknown as PrismaService,
+  );
 
   const originalEnv = process.env;
 
@@ -31,8 +46,14 @@ describe('ProAccountProvisioningService', () => {
   });
 
   it('creates an admin Premium Plus account when missing', async () => {
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.user.create as jest.Mock).mockResolvedValue({ id: 'admin-1' });
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    let createdData: { passwordHash?: string } | undefined;
+    prisma.user.create.mockImplementation(async (args: unknown) => {
+      const data = (args as { data: { passwordHash: string } }).data;
+      createdData = data;
+      return { id: 'admin-1' };
+    });
 
     await service.provisionFromEnvironment();
 
@@ -53,13 +74,15 @@ describe('ProAccountProvisioningService', () => {
       }),
     );
 
-    const passwordHash = (prisma.user.create as jest.Mock).mock.calls[0][0].data
-      .passwordHash as string;
-    await expect(bcrypt.compare('a-strong-production-password', passwordHash)).resolves.toBe(true);
+    const passwordHash = createdData?.passwordHash;
+    expect(passwordHash).toEqual(expect.any(String));
+    await expect(
+      bcrypt.compare('a-strong-production-password', passwordHash as string),
+    ).resolves.toBe(true);
   });
 
   it('is idempotent for an existing account and restores pro entitlements', async () => {
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+    prisma.user.findUnique.mockResolvedValue({
       id: 'admin-1',
       subscriptions: [{ id: 'sub-1' }],
     });
