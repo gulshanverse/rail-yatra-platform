@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaService } from './prisma.service';
 import { AuthModule } from './auth/auth.module';
+import { ProAccountProvisioningService } from './auth/pro-account-provisioning.service';
 import { ConversationsModule } from './conversations/conversations.module';
 import { MonetizationModule } from './monetization/monetization.module';
 import { EngagementModule } from './engagement/engagement.module';
@@ -27,7 +28,7 @@ import { TraceMiddleware } from './monitoring/trace.middleware';
     HealthModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService],
+  providers: [AppService, PrismaService, ProAccountProvisioningService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -40,8 +40,8 @@ export class MonetizationController {
       req.user.id,
     );
     const plan = SUBSCRIPTION_PLANS[sub.tier] || SUBSCRIPTION_PLANS.FREE;
+    const unlimitedCredits = sub.tier === 'PREMIUM_PLUS';
 
-    // Fetch active usage values to populate user quota dashboard
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const dailyChatsUsed = await this.prisma.usageLog.count({
       where: {
@@ -64,6 +64,7 @@ export class MonetizationController {
       expiry: sub.expiry,
       status: sub.status,
       creditsRemaining: sub.credits,
+      unlimitedCredits,
       dailyChatsUsed,
       activePnrsCount,
       savedRoutesCount,
@@ -71,7 +72,7 @@ export class MonetizationController {
         tierName: plan.tierName,
         price: plan.price,
         currency: plan.currency,
-        monthlyCreditsLimit: plan.monthlyCredits,
+        monthlyCreditsLimit: unlimitedCredits ? -1 : plan.monthlyCredits,
         dailyMessagesLimit: plan.dailyMessagesLimit,
         pnrMonitorLimit: plan.pnrMonitorLimit,
         savedRoutesLimit: plan.savedRoutesLimit,
@@ -102,7 +103,6 @@ export class MonetizationController {
     });
   }
 
-  // Webhook handler is anonymous.
   @Post('webhooks/:gateway')
   @HttpCode(200)
   async handleWebhook(
@@ -110,13 +110,11 @@ export class MonetizationController {
     @Body() body: WebhookPayload,
     @Headers('x-webhook-signature') signature: string,
   ) {
-    // Falls back to a default sandbox test signature if webhook verification headers are absent
     const sig = signature || 'default_test_sig';
     await this.monetizationService.handleWebhook(gateway, body, sig);
     return { received: true };
   }
 
-  // Admin controls
   @Post('admin/adjust')
   @UseGuards(JwtAuthGuard)
   async manualAdjust(

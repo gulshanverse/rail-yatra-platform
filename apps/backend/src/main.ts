@@ -9,6 +9,7 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { PrismaService } from './prisma.service';
+import { ProAccountProvisioningService } from './auth/pro-account-provisioning.service';
 
 // Load .env manually if process.env is missing key variables
 const envPath = path.resolve(process.cwd(), '.env');
@@ -179,11 +180,22 @@ async function bootstrap() {
     process.exit(1);
   }
 
+  // 4. Provision the optional production pro account from secrets.
+  // No credentials are stored in source control; the service hashes the password
+  // before persistence and is safe to run repeatedly on every deployment.
+  try {
+    await app.get(ProAccountProvisioningService).provisionFromEnvironment();
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.error(`[PRO ACCOUNT PROVISIONING ERROR] ${errorMsg}`);
+    process.exit(1);
+  }
+
   const port = Number(process.env.PORT ?? 5000);
   const server = (await app.listen(port, '0.0.0.0')) as Server;
   logger.log(`Backend Service running on port ${port}`);
 
-  // 4. Handle Graceful Shutdown Signal Interrupts
+  // 5. Handle Graceful Shutdown Signal Interrupts
   const gracefulShutdown = (signal: string) => {
     logger.warn(
       `Received signal ${signal}. Starting graceful shutdown procedure...`,
