@@ -1,14 +1,16 @@
 'use client';
 
-import { Bot, Check, Circle, Loader2, MessageCircle, User } from 'lucide-react';
+import { Bot, Check, Circle, Loader2, MessageCircle, RefreshCw, Square, User } from 'lucide-react';
 import MarkdownMessage from '../MarkdownMessage';
 
 type ConversationShellProps = {
   userQuery?: string;
   aiReply?: string;
-  status?: 'idle' | 'streaming' | 'ready' | 'error';
+  status?: 'idle' | 'streaming' | 'ready' | 'error' | 'stopped';
   conversationId?: string | null;
   contextLabel?: string;
+  onRetry?: () => void;
+  onStop?: () => void;
 };
 
 const statusCopy = {
@@ -16,6 +18,7 @@ const statusCopy = {
   streaming: 'Thinking',
   ready: 'Ready',
   error: 'Connection issue',
+  stopped: 'Response stopped',
 } as const;
 
 export function ConversationShell({
@@ -24,6 +27,8 @@ export function ConversationShell({
   status = 'idle',
   conversationId,
   contextLabel,
+  onRetry,
+  onStop,
 }: ConversationShellProps) {
   const hasMessages = Boolean(userQuery || aiReply);
 
@@ -44,7 +49,7 @@ export function ConversationShell({
                 <span className="hidden text-[11px] text-slate-600 sm:inline">Travel Copilot</span>
               </div>
               <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500" aria-live="polite">
-                {status === 'streaming' ? <Loader2 className="h-3 w-3 animate-spin text-blue-300" aria-hidden="true" /> : <Circle className={`h-2 w-2 fill-current ${status === 'error' ? 'text-amber-300' : 'text-emerald-400'}`} aria-hidden="true" />}
+                {status === 'streaming' ? <Loader2 className="h-3 w-3 animate-spin text-blue-300" aria-hidden="true" /> : <Circle className={`h-2 w-2 fill-current ${status === 'error' ? 'text-amber-300' : status === 'stopped' ? 'text-slate-400' : 'text-emerald-400'}`} aria-hidden="true" />}
                 {statusCopy[status]}
               </div>
             </div>
@@ -89,12 +94,33 @@ export function ConversationShell({
                     <MarkdownMessage content={aiReply} />
                     {status === 'streaming' ? <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded-full bg-indigo-300 align-middle" aria-label="Response streaming" /> : null}
                   </div>
+                  {status === 'error' && onRetry ? (
+                    <div className="mt-3 rounded-2xl border border-amber-300/10 bg-amber-300/[0.05] p-3">
+                      <p className="text-xs leading-5 text-amber-100/80">RailYatra could not finish this response. Your conversation is preserved.</p>
+                      <button type="button" onClick={onRetry} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-200/15 bg-amber-200/10 px-3 text-xs font-semibold text-amber-100 transition hover:bg-amber-200/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60">
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Retry in this conversation
+                      </button>
+                    </div>
+                  ) : null}
+                  {status === 'stopped' && onRetry ? (
+                    <button type="button" onClick={onRetry} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/60">
+                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Continue response
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
           </div>
         )}
       </div>
+
+      {status === 'streaming' && onStop ? (
+        <div className="flex justify-center border-t border-white/8 bg-white/[0.015] px-4 py-3">
+          <button type="button" onClick={onStop} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/60">
+            <Square className="h-3 w-3 fill-current" aria-hidden="true" /> Stop response
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
