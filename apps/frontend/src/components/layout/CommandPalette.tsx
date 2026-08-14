@@ -26,22 +26,18 @@ export function CommandPalette() {
     return COMMANDS.filter((command) => `${command.label} ${command.description}`.toLowerCase().includes(normalized));
   }, [query]);
 
+  const safeSelected = Math.min(selected, Math.max(results.length - 1, 0));
+
   React.useEffect(() => {
-    const openPalette = () => setOpen(true);
+    const openPalette = () => {
+      setQuery('');
+      setSelected(0);
+      setOpen(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
     window.addEventListener('railyatra:command-palette', openPalette);
     return () => window.removeEventListener('railyatra:command-palette', openPalette);
   }, []);
-
-  React.useEffect(() => {
-    if (!open) return;
-    setQuery('');
-    setSelected(0);
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [open]);
-
-  React.useEffect(() => {
-    setSelected((current) => Math.min(current, Math.max(results.length - 1, 0)));
-  }, [results.length]);
 
   const navigate = (href: string) => {
     setOpen(false);
@@ -75,7 +71,7 @@ export function CommandPalette() {
                 event.preventDefault();
                 setSelected((current) => Math.max(current - 1, 0));
               }
-              if (event.key === 'Enter' && results[selected]) navigate(results[selected].href);
+              if (event.key === 'Enter' && results[safeSelected]) navigate(results[safeSelected].href);
             }}
             placeholder="Search RailYatra..."
             className="h-14 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
@@ -93,7 +89,7 @@ export function CommandPalette() {
               className={cn(
                 'flex min-h-14 w-full items-center gap-3 rounded-lg px-3 text-left',
                 'transition-colors duration-120',
-                selected === index ? 'bg-interactive' : 'hover:bg-interactive',
+                safeSelected === index ? 'bg-interactive' : 'hover:bg-interactive',
               )}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
