@@ -16,7 +16,7 @@ export interface TabsProps {
   className?: string;
 }
 
-export function Tabs({ items, value, onValueChange, className }: TabsProps) {
+export function Tabs({ items, value, onValueChange, className: rootClassName }: TabsProps) {
   const tabRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
 
   const moveFocus = (direction: 1 | -1) => {
@@ -34,7 +34,7 @@ export function Tabs({ items, value, onValueChange, className }: TabsProps) {
   };
 
   return (
-    <div className={cn('flex min-w-0 overflow-x-auto border-b border-border', className)} role="tablist">
+    <div className={cn('flex min-w-0 overflow-x-auto border-b border-border', rootClassName)} role="tablist">
       {items.map((item, index) => {
         const active = item.value === value;
         return (
@@ -51,22 +51,19 @@ export function Tabs({ items, value, onValueChange, className }: TabsProps) {
               if (event.key === 'ArrowRight') {
                 event.preventDefault();
                 moveFocus(1);
-              }
-              if (event.key === 'ArrowLeft') {
+              } else if (event.key === 'ArrowLeft') {
                 event.preventDefault();
                 moveFocus(-1);
-              }
-              if (event.key === 'Home') {
+              } else if (event.key === 'Home') {
                 event.preventDefault();
                 const first = items.findIndex((entry) => !entry.disabled);
                 if (first >= 0) {
                   onValueChange(items[first].value);
                   tabRefs.current[first]?.focus();
                 }
-              }
-              if (event.key === 'End') {
+              } else if (event.key === 'End') {
                 event.preventDefault();
-                const last = [...items].map((entry, i) => (!entry.disabled ? i : -1)).pop() ?? -1;
+                const last = items.reduce((result, entry, i) => (!entry.disabled ? i : result), -1);
                 if (last >= 0) {
                   onValueChange(items[last].value);
                   tabRefs.current[last]?.focus();
@@ -78,7 +75,6 @@ export function Tabs({ items, value, onValueChange, className }: TabsProps) {
               'hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
               'focus-visible:outline-none focus-visible:ring-0',
               active && 'text-foreground',
-              className,
             )}
           >
             {item.label}
