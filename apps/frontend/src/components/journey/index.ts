@@ -1,4 +1,6 @@
 export { JourneyDecisionWorkspace } from './JourneyDecisionWorkspace';
 export { DecisionBadge } from './DecisionBadge';
 export { JourneyComparison } from './JourneyComparison';
+export { AIReasoningPanel } from './AIReasoningPanel';
 export type { JourneyDecisionWorkspaceData, JourneyWorkspaceOption } from './JourneyDecisionWorkspace';
+export type { RecommendationVerification } from './AIReasoningPanel';
