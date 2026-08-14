@@ -8,6 +8,7 @@ import { API_BASE_URL, authenticatedFetch } from '../lib/api';
 import { parseSSEBuffer } from '../lib/sse';
 import { JourneyAskAI, JourneyDecisionWorkspace } from '../components/journey';
 import { ConversationShell } from '../components/conversation';
+import { JourneyContextCard, type JourneyContext } from '../components/conversation';
 import { HomeIntelligence, HomeTrustStatus, JourneyComposer, RecentJourneys } from '../components/home';
 
 interface AIResponse {
@@ -23,6 +24,11 @@ function extractRoute(query: string) {
   return { origin: match?.[1]?.trim(), destination: match?.[2]?.trim() };
 }
 
+function extractDate(query: string) {
+  const match = query.match(/\b(today|tomorrow|next\s+\w+|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/i);
+  return match?.[1];
+}
+
 export default function Home() {
   const { user, theme, setTheme, clearAuth } = useAuthStore();
   const router = useRouter();
@@ -30,6 +36,7 @@ export default function Home() {
   const [aiLoading, setAiLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lastQuery, setLastQuery] = useState('');
+  const [journeyContext, setJourneyContext] = useState<JourneyContext>({});
   const conversationStorageKey = `${DECISION_CONVERSATION_KEY}:${user?.id ?? 'anonymous'}`;
 
   const createDecisionConversation = async (initialQuery: string) => {
@@ -42,12 +49,14 @@ export default function Home() {
     return data.id;
   };
 
-  const sendDecisionMessage = async (id: string, message: string) => authenticatedFetch(`${API_BASE_URL}/api/conversations/${id}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, context: { current_page: '/', surface: 'home-journey-composer' } }) });
+  const sendDecisionMessage = async (id: string, message: string) => authenticatedFetch(`${API_BASE_URL}/api/conversations/${id}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, context: { current_page: '/', surface: 'home-journey-composer', journey: journeyContext } }) });
 
   const handleRunQuery = async (userQuery: string) => {
     const query = userQuery.trim();
     if (!query || aiLoading) return;
     setLastQuery(query);
+    const route = extractRoute(query);
+    setJourneyContext((current) => ({ ...current, origin: route.origin ?? current.origin, destination: route.destination ?? current.destination, date: extractDate(query) ?? current.date }));
     setAiLoading(true);
     setAiResponse(null);
     try {
@@ -94,6 +103,10 @@ export default function Home() {
     await handleRunQuery(`${question} My original journey request was: "${lastQuery}"`);
   };
 
+  const handleContextSave = (nextContext: JourneyContext) => {
+    setJourneyContext(nextContext);
+  };
+
   const handleLogout = () => { clearAuth(); router.push('/login'); };
   const handleToggleTheme = () => { if (theme === 'light') setTheme('dark'); else if (theme === 'dark') setTheme('auto'); else setTheme('light'); };
   const route = extractRoute(lastQuery);
@@ -105,8 +118,9 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-7 sm:px-6 lg:py-12">
         <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{user ? `Welcome back, ${user.fullName.split(' ')[0]}` : 'Travel intelligence'}</p></div><HomeTrustStatus /></div>
         <JourneyComposer onSubmit={handleRunQuery} />
-        {(aiResponse || aiLoading) && <ConversationShell userQuery={lastQuery} aiReply={aiResponse?.reply} status={conversationStatus} conversationId={conversationId} contextLabel={route.origin && route.destination ? `${route.origin} → ${route.destination}` : undefined} />}
-        {aiResponse && <><JourneyDecisionWorkspace data={{ origin: route.origin, destination: route.destination, analysis: aiResponse.reply, verification: { status: 'estimated' } }} /><JourneyAskAI contextLabel={route.origin && route.destination ? `${route.origin} → ${route.destination}` : 'this journey'} onAsk={handleAskAboutJourney} disabled={aiLoading} /></>}
+        {(aiResponse || aiLoading) && <ConversationShell userQuery={lastQuery} aiReply={aiResponse?.reply} status={conversationStatus} conversationId={conversationId} contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : undefined} />}
+        {(aiResponse || aiLoading) && <JourneyContextCard context={journeyContext} onSave={handleContextSave} />}
+        {aiResponse && <><JourneyDecisionWorkspace data={{ origin: journeyContext.origin, destination: journeyContext.destination, analysis: aiResponse.reply, verification: { status: 'estimated' } }} /><JourneyAskAI contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : 'this journey'} onAsk={handleAskAboutJourney} disabled={aiLoading} /></>}
         {aiLoading && !aiResponse ? <JourneyDecisionWorkspace data={null} loading /> : null}
         <RecentJourneys /><HomeIntelligence />
       </main>
