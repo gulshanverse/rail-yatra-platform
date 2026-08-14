@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { API_BASE_URL, authenticatedFetch } from '../lib/api';
 import { parseSSEBuffer } from '../lib/sse';
 import MarkdownMessage from '../components/MarkdownMessage';
+import { JourneyDecisionWorkspace } from '../components/journey';
 import { HomeIntelligence, HomeTrustStatus, JourneyComposer, RecentJourneys } from '../components/home';
 
 interface AIResponse {
@@ -17,12 +18,21 @@ interface AIResponse {
 
 const DECISION_CONVERSATION_KEY = 'railyatra_decision_engine_conversation_id';
 
+function extractRoute(query: string) {
+  const match = query.match(/(.+?)\s+(?:to|→)\s+(.+?)(?=\s+(?:for|on|today|tomorrow|next)\b|$)/i);
+  return {
+    origin: match?.[1]?.trim(),
+    destination: match?.[2]?.trim(),
+  };
+}
+
 export default function Home() {
   const { user, theme, setTheme, clearAuth } = useAuthStore();
   const router = useRouter();
   const [aiResponse, setAiResponse] = useState<AIResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [lastQuery, setLastQuery] = useState('');
 
   const conversationStorageKey = `${DECISION_CONVERSATION_KEY}:${user?.id ?? 'anonymous'}`;
 
@@ -53,6 +63,7 @@ export default function Home() {
     const query = userQuery.trim();
     if (!query || aiLoading) return;
 
+    setLastQuery(query);
     setAiLoading(true);
     setAiResponse(null);
 
@@ -149,12 +160,14 @@ export default function Home() {
     else setTheme('light');
   };
 
+  const route = extractRoute(lastQuery);
+
   return (
     <div className="min-h-screen bg-[#070A12] text-white">
       <header className="sticky top-0 z-50 border-b border-white/8 bg-[#070A12]/90 px-4 py-3 backdrop-blur-xl sm:px-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <button type="button" onClick={() => router.push('/')} className="flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500 text-white shadow-lg shadow-blue-500/20"><Train className="h-4.5 w-4.5" aria-hidden="true" /></span>
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500 text-white shadow-lg shadow-blue-500/20"><Train className="h-4 w-4" aria-hidden="true" /></span>
             <span className="text-lg font-bold tracking-tight">RailYatra <span className="text-blue-400">AI</span></span>
           </button>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -173,29 +186,29 @@ export default function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-7 sm:px-6 lg:py-12">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{user ? `Welcome back, ${user.fullName.split(' ')[0]}` : 'Travel intelligence'}</p>
-          </div>
-          <HomeTrustStatus />
-        </div>
+        <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{user ? `Welcome back, ${user.fullName.split(' ')[0]}` : 'Travel intelligence'}</p></div><HomeTrustStatus /></div>
 
         <JourneyComposer onSubmit={handleRunQuery} />
 
         {aiResponse && (
-          <section className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/70 shadow-[0_20px_70px_rgba(0,0,0,0.2)]" aria-live="polite">
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sm:px-6">
-              <div className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-400/10 text-indigo-300"><CheckCircle2 className="h-4 w-4" /></span><div><p className="text-sm font-semibold">RailYatra recommendation</p><p className="text-[11px] text-slate-500">Conversation context preserved</p></div></div>
-              <span className="rounded-full border border-emerald-400/15 bg-emerald-400/5 px-2.5 py-1 text-[11px] font-medium text-emerald-300">{aiResponse.parsed_intent}</span>
-            </div>
-            <div className="px-5 py-5 sm:px-6"><div className="prose prose-invert max-w-none text-sm leading-6 text-slate-200"><MarkdownMessage content={aiResponse.reply} /></div><p className="mt-5 text-xs text-slate-500">{aiResponse.explanation}</p></div>
-          </section>
+          <>
+            <JourneyDecisionWorkspace
+              data={{
+                origin: route.origin,
+                destination: route.destination,
+                analysis: aiResponse.reply,
+                verification: { status: 'estimated' },
+              }}
+            />
+            <section className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/50 shadow-[0_20px_70px_rgba(0,0,0,0.16)]" aria-live="polite">
+              <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sm:px-6"><div className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-400/10 text-indigo-300"><CheckCircle2 className="h-4 w-4" /></span><div><p className="text-sm font-semibold">Full AI analysis</p><p className="text-[11px] text-slate-500">Conversation context preserved</p></div></div><span className="rounded-full border border-emerald-400/15 bg-emerald-400/5 px-2.5 py-1 text-[11px] font-medium text-emerald-300">{aiResponse.parsed_intent}</span></div>
+              <div className="px-5 py-5 sm:px-6"><div className="prose prose-invert max-w-none text-sm leading-6 text-slate-200"><MarkdownMessage content={aiResponse.reply} /></div><p className="mt-5 text-xs text-slate-500">{aiResponse.explanation}</p></div>
+            </section>
+          </>
         )}
 
         {aiLoading && !aiResponse && (
-          <section className="rounded-[24px] border border-indigo-300/10 bg-slate-900/60 p-5 sm:p-6" aria-live="polite" aria-label="RailYatra is thinking">
-            <div className="flex items-center gap-3"><span className="grid h-9 w-9 animate-pulse place-items-center rounded-xl bg-indigo-400/10 text-indigo-300"><Train className="h-4 w-4" /></span><div className="flex-1 space-y-2"><div className="h-3 w-40 animate-pulse rounded bg-white/10" /><div className="h-2.5 w-64 max-w-full animate-pulse rounded bg-white/5" /></div></div>
-          </section>
+          <JourneyDecisionWorkspace data={null} loading />
         )}
 
         <RecentJourneys />
