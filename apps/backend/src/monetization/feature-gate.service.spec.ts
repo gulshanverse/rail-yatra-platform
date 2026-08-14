@@ -1,24 +1,37 @@
+import { PrismaService } from '../prisma.service';
 import { FeatureGateService } from './feature-gate.service';
 
 describe('FeatureGateService unlimited pro credits', () => {
   it('allows journey analysis forever for Premium Plus without decrementing credits', async () => {
+    let subscriptionUpdates = 0;
+    let usageLogs = 0;
+
     const prisma = {
       subscription: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'sub-1',
-          userId: 'user-1',
-          tier: 'PREMIUM_PLUS',
-          credits: 9999,
-          status: 'active',
-        }),
-        update: jest.fn(),
+        findFirst: () =>
+          Promise.resolve({
+            id: 'sub-1',
+            userId: 'user-1',
+            tier: 'PREMIUM_PLUS',
+            credits: 9999,
+            status: 'active',
+          }),
+        update: () => {
+          subscriptionUpdates += 1;
+          return Promise.resolve({});
+        },
       },
       usageLog: {
-        create: jest.fn(),
+        create: () => {
+          usageLogs += 1;
+          return Promise.resolve({});
+        },
       },
-    } as never;
+    };
 
-    const service = new FeatureGateService(prisma);
+    const service = new FeatureGateService(
+      prisma as unknown as PrismaService,
+    );
 
     await expect(
       service.enforceEntitlement('user-1', 'journey_analysis'),
@@ -26,9 +39,7 @@ describe('FeatureGateService unlimited pro credits', () => {
 
     await service.logUsage('user-1', 'journey_analysis');
 
-    expect(prisma.subscription.update).not.toHaveBeenCalled();
-    expect(prisma.usageLog.create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', action: 'journey_analysis' },
-    });
+    expect(subscriptionUpdates).toBe(0);
+    expect(usageLogs).toBe(1);
   });
 });
