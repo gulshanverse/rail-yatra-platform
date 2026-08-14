@@ -85,27 +85,21 @@ describe('ProAccountProvisioningService', () => {
     await service.provisionFromEnvironment();
 
     expect(userCreateCalls).toBe(1);
-    expect(createdData).toEqual(
-      expect.objectContaining({
-        email: 'admin@example.com',
-        role: 'ADMIN',
-        passwordHash: expect.any(String),
-        subscriptions: {
-          create: expect.objectContaining({
-            tier: 'PREMIUM_PLUS',
-            status: 'active',
-            credits: 9999,
-          }),
-        },
-      }),
-    );
+    expect(createdData).toBeDefined();
+    if (createdData === undefined) return;
 
-    const passwordHash: string | undefined = createdData?.passwordHash;
-    expect(typeof passwordHash).toBe('string');
-    if (passwordHash === undefined) return;
+    expect(createdData.email).toBe('admin@example.com');
+    expect(createdData.role).toBe('ADMIN');
+    expect(typeof createdData.passwordHash).toBe('string');
+    expect(createdData.subscriptions.create.tier).toBe('PREMIUM_PLUS');
+    expect(createdData.subscriptions.create.status).toBe('active');
+    expect(createdData.subscriptions.create.credits).toBe(9999);
 
     await expect(
-      bcrypt.compare('a-strong-production-password', passwordHash),
+      bcrypt.compare(
+        'a-strong-production-password',
+        createdData.passwordHash,
+      ),
     ).resolves.toBe(true);
   });
 
