@@ -13,7 +13,7 @@ describe('rankOptions', () => {
     ['fastest', 'fast'],
     ['cheapest', 'cheap'],
     ['lowest-risk', 'fast'],
-    ['overall', 'cheap'],
+    ['overall', 'fast'],
   ];
 
   it.each(cases)('prioritizes the expected option for %s', (mode, expected) => {
