@@ -17,7 +17,7 @@ import * as express from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma.service';
 import type { AuthenticatedRequest } from '../common/interfaces';
-import { parseSSEBuffer } from '../common/sse';
+import { formatSSEEvent, parseSSEBuffer } from '../common/sse';
 
 @Controller('api/conversations')
 @UseGuards(JwtAuthGuard)
@@ -236,7 +236,7 @@ export class ConversationsController {
           } catch {
             console.warn('Ignoring malformed upstream SSE event');
           }
-          res.write(`data: ${sseEvent.data}\n\n`);
+          res.write(formatSSEEvent(sseEvent));
         }
       }
 
@@ -250,11 +250,14 @@ export class ConversationsController {
         sawError = true;
         console.error('Error during AI stream:', streamError);
         res.write(
-          `data: ${JSON.stringify({
-            type: 'error',
-            code: 'AI_STREAM_READ_ERROR',
-            message: 'The AI response stream ended unexpectedly.',
-          })}\n\n`,
+          formatSSEEvent({
+            event: 'error',
+            data: JSON.stringify({
+              type: 'error',
+              code: 'AI_STREAM_READ_ERROR',
+              message: 'The AI response stream ended unexpectedly.',
+            }),
+          }),
         );
       }
     } finally {

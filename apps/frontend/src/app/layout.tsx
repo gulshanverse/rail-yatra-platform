@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import ThemeSync from "@/components/ThemeSync";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { CommandPalette, MobileBottomNav } from "@/components/layout";
+import { CommandPalette } from "@/components/layout";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RailYatra AI — The AI Operating System for Travel Decisions",
-  description: "Advanced AI-powered railway travel intelligence platform offering predictions, routing recommendations, and smart travel assistants.",
+  title: "RailYatra — Smarter journeys, from search to station",
+  description: "RailYatra is the premium AI-powered railway travel platform for discovering routes, comparing trains, planning journeys, and staying informed on the move.",
 };
 
 export default function RootLayout({
@@ -34,7 +34,6 @@ export default function RootLayout({
           {children}
         </ErrorBoundary>
         <CommandPalette />
-        <MobileBottomNav />
         <Analytics />
       </body>
     </html>
