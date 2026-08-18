@@ -1,121 +1,91 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { LogOut, Moon, Sun, Train } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
-import { API_BASE_URL, authenticatedFetch } from '../lib/api';
-import { parseSSEBuffer } from '../lib/sse';
-import { JourneyAskAI, JourneyDecisionWorkspace } from '../components/journey';
-import { ConversationShell, JourneyContextCard, type JourneyContext } from '../components/conversation';
-import { HomeIntelligence, HomeTrustStatus, JourneyComposer, RecentJourneys } from '../components/home';
+import Image from 'next/image';
+import Link from 'next/link';
+import { FormEvent, useEffect, useState } from 'react';
+import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, Search, Sparkles, TrainFront, Users, Wifi } from 'lucide-react';
+import { HERO_SCENES, MiniJourney, PageFrame, SectionHeading, StatPill, TrainCard } from '@/components/railyatra/railyatra-ui';
 
-interface AIResponse { reply: string; parsed_intent: string; explanation: string; }
-const DECISION_CONVERSATION_KEY = 'railyatra_decision_engine_conversation_id';
+const popularJourneys = [
+  { title: 'The western escape', route: 'Mumbai → Goa', meta: '3 nights · coastal', image: 'https://images.unsplash.com/photo-1533094602577-198d3beab8ea?auto=format&fit=crop&w=1000&q=80' },
+  { title: 'Valleys & tea gardens', route: 'Kolkata → Darjeeling', meta: '4 nights · mountain', image: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1000&q=80' },
+  { title: 'A royal weekend', route: 'Delhi → Jaipur', meta: '2 nights · heritage', image: 'https://images.unsplash.com/photo-1477587458883-47145ed94245?auto=format&fit=crop&w=1000&q=80' },
+];
 
-function extractRoute(query: string) {
-  const match = query.match(/(.+?)\s+(?:to|→)\s+(.+?)(?=\s+(?:for|on|today|tomorrow|next)\b|$)/i);
-  return { origin: match?.[1]?.trim(), destination: match?.[2]?.trim() };
-}
-function extractDate(query: string) {
-  const match = query.match(/\b(today|tomorrow|next\s+\w+|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/i);
-  return match?.[1];
-}
+const destinations = [
+  { name: 'Udaipur', note: 'Lakeside slow travel', image: 'https://images.unsplash.com/photo-1477587458883-47145ed94245?auto=format&fit=crop&w=900&q=80' },
+  { name: 'Kochi', note: 'Monsoon on the coast', image: 'https://images.unsplash.com/photo-1593693397690-362cb9666fc2?auto=format&fit=crop&w=900&q=80' },
+  { name: 'Shimla', note: 'Mountain rail mornings', image: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=900&q=80' },
+  { name: 'Varanasi', note: 'A city that stays with you', image: 'https://images.unsplash.com/photo-1561361058-c24cecae35ca?auto=format&fit=crop&w=900&q=80' },
+];
 
 export default function Home() {
-  const { user, theme, setTheme, clearAuth } = useAuthStore();
-  const router = useRouter();
-  const [aiResponse, setAiResponse] = useState<AIResponse | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [lastQuery, setLastQuery] = useState('');
-  const [journeyContext, setJourneyContext] = useState<JourneyContext>({});
-  const [streamError, setStreamError] = useState(false);
-  const [responseStopped, setResponseStopped] = useState(false);
-  const streamAbortRef = useRef<AbortController | null>(null);
-  const conversationStorageKey = `${DECISION_CONVERSATION_KEY}:${user?.id ?? 'anonymous'}`;
+  const [scene, setScene] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [from, setFrom] = useState('Bilaspur');
+  const [to, setTo] = useState('New Delhi');
+  const [date, setDate] = useState('');
+  const [travellers, setTravellers] = useState('1 Adult');
+  const [travelClass, setTravelClass] = useState('3A · AC 3 Tier');
 
-  useEffect(() => () => streamAbortRef.current?.abort(), []);
+  useEffect(() => {
+    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => setScene((current) => (current + 1) % HERO_SCENES.length), 7000);
+    return () => window.clearInterval(timer);
+  }, [paused]);
 
-  const createDecisionConversation = async (initialQuery: string) => {
-    const response = await authenticatedFetch(`${API_BASE_URL}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ summary: `Decision: ${initialQuery.slice(0, 32)}` }) });
-    if (!response.ok) throw new Error(`Conversation creation failed (${response.status})`);
-    const data = await response.json() as { id?: string };
-    if (!data.id) throw new Error('Conversation ID missing');
-    sessionStorage.setItem(conversationStorageKey, data.id);
-    setConversationId(data.id);
-    return data.id;
-  };
-  const sendDecisionMessage = async (id: string, message: string, signal?: AbortSignal) => authenticatedFetch(`${API_BASE_URL}/api/conversations/${id}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, context: { current_page: '/', surface: 'home-journey-composer', journey: journeyContext } }), signal });
-
-  const handleRunQuery = async (userQuery: string, options?: { retry?: boolean }) => {
-    const query = userQuery.trim();
-    if (!query || aiLoading) return;
-    setLastQuery(query);
-    const route = extractRoute(query);
-    setJourneyContext((current) => ({ ...current, origin: route.origin ?? current.origin, destination: route.destination ?? current.destination, date: extractDate(query) ?? current.date }));
-    setAiLoading(true); setStreamError(false); setResponseStopped(false); setAiResponse(options?.retry ? aiResponse : null);
-    const controller = new AbortController();
-    streamAbortRef.current = controller;
-    try {
-      let activeConversationId = conversationId ?? sessionStorage.getItem(conversationStorageKey);
-      let response: Response;
-      if (activeConversationId) {
-        response = await sendDecisionMessage(activeConversationId, query, controller.signal);
-        if (response.status === 404) {
-          sessionStorage.removeItem(conversationStorageKey); setConversationId(null);
-          activeConversationId = await createDecisionConversation(query);
-          response = await sendDecisionMessage(activeConversationId, query, controller.signal);
-        }
-      } else {
-        activeConversationId = await createDecisionConversation(query);
-        response = await sendDecisionMessage(activeConversationId, query, controller.signal);
-      }
-      if (!response.ok) throw new Error(`Decision Engine request failed (${response.status})`);
-      if (!response.body) throw new Error('Readable stream not supported');
-      const reader = response.body.getReader(); const decoder = new TextDecoder();
-      let buffer = ''; let accumulated = options?.retry ? '' : ''; let intent = 'conversation'; let completed = false;
-      const processEvent = (rawData: string) => {
-        const data = JSON.parse(rawData) as { type?: string; value?: string; reply?: string; message?: string };
-        if (data.type === 'intent' && typeof data.value === 'string') intent = data.value;
-        if (data.type === 'token' && typeof data.value === 'string') { accumulated += data.value; setAiResponse({ reply: accumulated, parsed_intent: intent, explanation: 'Orchestrated by the RailYatra AI decision engine.' }); }
-        if (data.type === 'done') { completed = true; if (typeof data.reply === 'string') accumulated = data.reply; setAiResponse({ reply: accumulated, parsed_intent: intent, explanation: 'Orchestrated by the RailYatra AI decision engine.' }); }
-        if (data.type === 'error') throw new Error(data.message || 'AI stream failed');
-      };
-      while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); const [events, remainder] = parseSSEBuffer(buffer); buffer = remainder; for (const event of events) processEvent(event.data); }
-      buffer += decoder.decode(); const [finalEvents] = parseSSEBuffer(buffer); for (const event of finalEvents) processEvent(event.data);
-      if (!completed && !accumulated.trim()) throw new Error('Empty AI response');
-    } catch (error) {
-      if (controller.signal.aborted) { setResponseStopped(true); return; }
-      console.error('Error fetching AI decision response:', error); setStreamError(true);
-      setAiResponse((current) => current ?? { reply: 'RailYatra AI could not finish this response.', parsed_intent: 'system_error', explanation: 'Your conversation was preserved. Retry to continue the same conversation.' });
-    } finally {
-      if (streamAbortRef.current === controller) streamAbortRef.current = null;
-      setAiLoading(false);
-    }
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const params = new URLSearchParams({ from, to, date, travellers, class: travelClass });
+    window.location.href = `/search?${params.toString()}`;
   };
 
-  const handleRetry = () => { if (lastQuery && !aiLoading) void handleRunQuery(lastQuery, { retry: true }); };
-  const handleStop = () => streamAbortRef.current?.abort();
-  const handleAskAboutJourney = async (question: string) => { if (!lastQuery || aiLoading) return; await handleRunQuery(`${question} My original journey request was: "${lastQuery}"`); };
-  const handleContextSave = (nextContext: JourneyContext) => setJourneyContext(nextContext);
-  const handleLogout = () => { streamAbortRef.current?.abort(); clearAuth(); router.push('/login'); };
-  const handleToggleTheme = () => { if (theme === 'light') setTheme('dark'); else if (theme === 'dark') setTheme('auto'); else setTheme('light'); };
-  const conversationStatus = aiLoading ? 'streaming' : streamError ? 'error' : responseStopped ? 'stopped' : aiResponse ? 'ready' : 'idle';
+  const current = HERO_SCENES[scene];
 
   return (
-    <div className="min-h-screen bg-[#070A12] text-white">
-      <header className="sticky top-0 z-50 border-b border-white/8 bg-[#070A12]/90 px-4 py-3 backdrop-blur-xl sm:px-6"><div className="mx-auto flex max-w-6xl items-center justify-between"><button type="button" onClick={() => router.push('/')} className="flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500 text-white shadow-lg shadow-blue-500/20"><Train className="h-4 w-4" aria-hidden="true" /></span><span className="text-lg font-bold tracking-tight">RailYatra <span className="text-blue-400">AI</span></span></button><div className="flex items-center gap-2 sm:gap-3"><button type="button" onClick={handleToggleTheme} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60" aria-label="Change theme">{theme === 'light' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>{user && <div className="flex items-center gap-2.5 border-l border-white/10 pl-2.5 sm:pl-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold text-white">{user.fullName}</p><p className="text-[11px] capitalize text-slate-500">{user.role.toLowerCase()} account</p></div><div className="grid h-9 w-9 place-items-center rounded-xl border border-indigo-300/20 bg-indigo-400/10 text-sm font-bold text-indigo-200">{user.fullName[0]?.toUpperCase()}</div><button type="button" onClick={handleLogout} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-slate-400 transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50" aria-label="Log out"><LogOut className="h-4 w-4" /></button></div>}</div></div></header>
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-7 sm:px-6 lg:py-12">
-        <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{user ? `Welcome back, ${user.fullName.split(' ')[0]}` : 'Travel intelligence'}</p></div><HomeTrustStatus /></div>
-        <JourneyComposer onSubmit={handleRunQuery} />
-        {(aiResponse || aiLoading) && <ConversationShell userQuery={lastQuery} aiReply={aiResponse?.reply} status={conversationStatus} conversationId={conversationId} contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : undefined} onRetry={handleRetry} onStop={handleStop} onFollowUp={handleAskAboutJourney} />}
-        {(aiResponse || aiLoading) && <JourneyContextCard context={journeyContext} onSave={handleContextSave} />}
-        {aiResponse && <><JourneyDecisionWorkspace data={{ origin: journeyContext.origin ?? undefined, destination: journeyContext.destination ?? undefined, analysis: aiResponse.reply, verification: { status: 'estimated' } }} /><JourneyAskAI contextLabel={journeyContext.origin && journeyContext.destination ? `${journeyContext.origin} → ${journeyContext.destination}` : 'this journey'} onAsk={handleAskAboutJourney} disabled={aiLoading} /></>}
-        {aiLoading && !aiResponse ? <JourneyDecisionWorkspace data={null} loading /> : null}
-        <RecentJourneys /><HomeIntelligence />
+    <PageFrame className="bg-[#f5f1e8]">
+      <main>
+        <section className="relative isolate min-h-[680px] overflow-hidden bg-[#07111f] text-white sm:min-h-[730px]" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} aria-label="RailYatra travel introduction">
+          {HERO_SCENES.map((item, index) => <div key={item.title} className="absolute inset-0 transition-opacity duration-700" style={{ opacity: index === scene ? 1 : 0, backgroundImage: `url(${item.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }} aria-hidden={index !== scene} />)}
+          <div className={`absolute inset-0 bg-gradient-to-r ${current.tone}`} />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#07111f] via-transparent to-[#07111f]/20" />
+          <div className="relative mx-auto flex min-h-[680px] max-w-[1440px] flex-col justify-end px-5 pb-14 sm:min-h-[730px] sm:px-8 sm:pb-20 lg:px-12">
+            <div className="max-w-3xl">
+              <p className="eyebrow text-[#f4d58d]">{current.eyebrow}</p>
+              <h1 className="mt-4 max-w-3xl font-serif text-5xl font-semibold leading-[.98] tracking-[-0.055em] sm:text-7xl">{current.title}</h1>
+              <p className="mt-6 max-w-xl text-base leading-7 text-white/75 sm:text-lg">{current.description}</p>
+            </div>
+
+            <form onSubmit={submitSearch} className="mt-10 rounded-[24px] border border-white/20 bg-[#07111f]/85 p-2 shadow-2xl backdrop-blur-xl lg:max-w-[1080px]">
+              <div className="grid gap-1 lg:grid-cols-[1.15fr_1.15fr_1fr_.8fr_1fr_auto]">
+                <label className="flex min-h-16 flex-col justify-center rounded-2xl px-4 transition hover:bg-white/5"><span className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#a9b8c9]">From</span><span className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-[#e7b75e]" /><input value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-white/40" aria-label="Origin station" /></span></label>
+                <label className="flex min-h-16 flex-col justify-center rounded-2xl px-4 transition hover:bg-white/5"><span className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#a9b8c9]">To</span><span className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-[#e7b75e]" /><input value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-white/40" aria-label="Destination station" /></span></label>
+                <label className="flex min-h-16 flex-col justify-center rounded-2xl px-4 transition hover:bg-white/5"><span className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#a9b8c9]">Date</span><span className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-[#e7b75e]" /><input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none [color-scheme:dark]" aria-label="Journey date" /></span></label>
+                <label className="flex min-h-16 flex-col justify-center rounded-2xl px-4 transition hover:bg-white/5"><span className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#a9b8c9]">Travellers</span><span className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-[#e7b75e]" /><select value={travellers} onChange={(event) => setTravellers(event.target.value)} className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none [color-scheme:dark]" aria-label="Travellers"><option>1 Adult</option><option>2 Adults</option><option>2 Adults, 1 Child</option></select></span></label>
+                <label className="flex min-h-16 flex-col justify-center rounded-2xl px-4 transition hover:bg-white/5"><span className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#a9b8c9]">Class</span><select value={travelClass} onChange={(event) => setTravelClass(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold text-white outline-none [color-scheme:dark]" aria-label="Travel class"><option>3A · AC 3 Tier</option><option>2A · AC 2 Tier</option><option>SL · Sleeper</option></select></label>
+                <button type="submit" className="m-1 flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#e7b75e] px-6 text-sm font-bold text-[#07111f] transition hover:bg-[#f4d58d] active:scale-[.98] lg:min-w-[145px]"><Search className="h-4 w-4" />Search trains</button>
+              </div>
+            </form>
+            <div className="mt-5 flex flex-wrap items-center gap-3 text-xs text-white/60"><Sparkles className="h-4 w-4 text-[#e7b75e]" /><span>Or tell Yatri where you want to go</span><Link href="/chat" className="font-semibold text-[#f4d58d] underline decoration-[#f4d58d]/35 underline-offset-4">“Goa next weekend from Bilaspur, overnight.”</Link></div>
+            <div className="mt-8 flex items-center justify-between"><div className="flex gap-2" role="tablist" aria-label="Hero scenes">{HERO_SCENES.map((item, index) => <button key={item.title} type="button" onClick={() => setScene(index)} role="tab" aria-selected={index === scene} aria-label={`Show scene ${index + 1}`} className={`h-1 rounded-full transition-all ${index === scene ? 'w-12 bg-[#e7b75e]' : 'w-5 bg-white/35 hover:bg-white/60'}`} />)}</div><div className="flex gap-2"><button type="button" onClick={() => setScene((scene - 1 + HERO_SCENES.length) % HERO_SCENES.length)} aria-label="Previous scene" className="grid h-10 w-10 place-items-center rounded-full border border-white/20 text-white/70 transition hover:bg-white/10 hover:text-white"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={() => setScene((scene + 1) % HERO_SCENES.length)} aria-label="Next scene" className="grid h-10 w-10 place-items-center rounded-full border border-white/20 text-white/70 transition hover:bg-white/10 hover:text-white"><ChevronRight className="h-4 w-4" /></button></div></div>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 lg:py-24"><SectionHeading eyebrow="Curated by Yatri" title="Journeys worth taking" description="Start with a feeling, not a station code. These routes are shaped by season, pace, and the stories waiting at the other end." action={<Link href="/plan" className="flex items-center gap-2 text-sm font-semibold text-[#1f5f8b]">Explore all journeys <ArrowRight className="h-4 w-4" /></Link>} /><div className="grid gap-5 md:grid-cols-3">{popularJourneys.map((journey) => <MiniJourney key={journey.title} {...journey} />)}</div></section>
+
+        <section className="border-y border-[#e2ddd3] bg-[#f8f5ef]"><div className="mx-auto grid max-w-[1440px] gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[.85fr_1.15fr] lg:px-12 lg:py-24"><div><p className="eyebrow text-[#9a6b28]">Journey intelligence</p><h2 className="mt-3 max-w-md font-serif text-4xl font-semibold leading-tight tracking-[-.04em]">A better answer than “fastest.”</h2><p className="mt-5 max-w-md text-[15px] leading-7 text-[#647185]">RailYatra looks beyond timetables. Yatri weighs connection risk, historical delays, availability, and what you have told us matters most.</p><Link href="/chat" className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#152338] px-5 text-sm font-semibold text-white transition hover:bg-[#254263]">Ask Yatri anything <Sparkles className="h-4 w-4 text-[#f4d58d]" /></Link><div className="mt-10 flex flex-wrap gap-2"><StatPill icon={Clock3} label="Typical save" value="42 min" /><StatPill icon={Wifi} label="Live signals" value="24/7" /></div></div><div className="grid gap-4 sm:grid-cols-2"><TrainCard recommended /><TrainCard compact train={{ name: 'Gondwana Express', number: '12409', from: 'BSP', to: 'H Nizamuddin', departure: '20:15', arrival: '11:10', duration: '14h 55m', fare: '₹1,820', confirmation: '86%', delay: '81%', reliability: 'Reliable' }} /><div className="rounded-[22px] bg-[#152338] p-6 text-white sm:col-span-2"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#e7b75e] text-[#07111f]"><Sparkles className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Why Yatri recommends Rajdhani</p><p className="mt-1 text-xs text-white/55">A transparent recommendation, not a black box.</p></div></div><div className="mt-6 grid gap-3 text-sm text-white/75 sm:grid-cols-3"><p><span className="mb-1 block text-xs text-[#f4d58d]">93%</span>confirmation probability</p><p><span className="mb-1 block text-xs text-[#f4d58d]">88%</span>on-time confidence</p><p><span className="mb-1 block text-xs text-[#f4d58d]">15h 45m</span>comfortable overnight route</p></div></div></div></div></section>
+
+        <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 lg:py-24"><SectionHeading eyebrow="Live railway experience" title="Know what is next" description="From departure board to platform change, the important details stay close when the journey begins." action={<Link href="/live" className="flex items-center gap-2 text-sm font-semibold text-[#1f5f8b]">Open live view <ArrowRight className="h-4 w-4" /></Link>} /><div className="grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><div className="relative min-h-[310px] overflow-hidden rounded-[24px] bg-[#0f2b43] p-7 text-white"><div className="absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(circle_at_70%_35%,rgba(231,183,94,.32),transparent_32%),linear-gradient(135deg,transparent_35%,rgba(255,255,255,.05)_35%,transparent_36%)]" /><div className="relative max-w-md"><p className="eyebrow text-[#f4d58d]">On your next journey</p><h3 className="mt-4 font-serif text-3xl font-semibold">Everything you need, one calm view.</h3><p className="mt-4 text-sm leading-6 text-white/65">Track your train, see the next stop, and get a useful alert before the platform gets busy.</p><div className="mt-8 flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10"><TrainFront className="h-5 w-5 text-[#f4d58d]" /></div><div><p className="text-sm font-semibold">12442 Rajdhani Express</p><p className="mt-1 text-xs text-white/55">Running on time · Next stop Itarsi</p></div></div></div></div><div className="rounded-[24px] border border-[#e2ddd3] bg-white p-7"><p className="eyebrow text-[#9a6b28]">Trust, built in</p><h3 className="mt-3 font-serif text-3xl font-semibold">Clear about certainty.</h3><p className="mt-4 text-sm leading-6 text-[#647185]">We label estimates, live signals, and simulated data so you can make decisions with the right level of confidence.</p><div className="mt-7 space-y-4 text-sm"><div className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#e5f3ea] text-[#28714b]"><ShieldCheckIcon /></span><span>Transparent reliability scores</span></div><div className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#fff4d9] text-[#a06d1d]"><Sparkles className="h-4 w-4" /></span><span>Human-readable AI reasoning</span></div></div></div></div></section>
+
+        <section className="bg-[#0f2b43] text-white"><div className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 lg:py-24"><SectionHeading eyebrow="Go somewhere new" title="Popular right now" description="A little inspiration for the next time you open the map." action={<Link href="/plan" className="flex items-center gap-2 text-sm font-semibold text-[#f4d58d]">Browse destinations <ArrowRight className="h-4 w-4" /></Link>} /><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{destinations.map((destination) => <Link href="/plan" key={destination.name} className="group relative min-h-[210px] overflow-hidden rounded-[20px]"><Image src={destination.image} alt={destination.name} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover transition duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-[#07111f]/95 via-[#07111f]/10 to-transparent" /><div className="absolute inset-x-4 bottom-4"><h3 className="font-serif text-2xl font-semibold">{destination.name}</h3><p className="mt-1 text-xs text-white/65">{destination.note}</p></div></Link>)}</div></div></section>
+
+        <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 lg:py-24"><div className="grid gap-10 lg:grid-cols-[1fr_.8fr] lg:items-center"><div><p className="eyebrow text-[#9a6b28]">The RailYatra difference</p><h2 className="mt-3 max-w-xl font-serif text-4xl font-semibold leading-tight tracking-[-.04em]">Travel planning that feels more like a good conversation.</h2><div className="mt-8 grid gap-6 sm:grid-cols-2"><div><p className="font-semibold">Discover with context</p><p className="mt-2 text-sm leading-6 text-[#647185]">Seasonal routes, destination ideas, and the right pace for your time away.</p></div><div><p className="font-semibold">Decide with clarity</p><p className="mt-2 text-sm leading-6 text-[#647185]">Scores that explain the trade-offs instead of hiding them.</p></div><div><p className="font-semibold">Stay in the moment</p><p className="mt-2 text-sm leading-6 text-[#647185]">Useful live signals without the noise of a control room.</p></div><div><p className="font-semibold">Keep the journey</p><p className="mt-2 text-sm leading-6 text-[#647185]">A calm travel wallet for tickets, PNR status, and what comes next.</p></div></div></div><div className="relative overflow-hidden rounded-[26px] bg-[#e7b75e] p-8 text-[#07111f] sm:p-10"><div className="absolute -right-10 -top-10 h-40 w-40 rounded-full border-[20px] border-[#07111f]/10" /><Sparkles className="relative h-7 w-7" /><p className="relative mt-10 font-serif text-3xl font-semibold leading-tight">“What if the best route is the one that makes the whole day easier?”</p><p className="relative mt-5 text-sm font-medium text-[#07111f]/65">— Yatri, your travel intelligence layer</p><Link href="/chat" className="relative mt-8 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#07111f] px-5 text-sm font-semibold text-white">Meet Yatri <ArrowRight className="h-4 w-4" /></Link></div></div></section>
+
+        <section className="border-t border-[#e2ddd3] bg-[#eee8dc]"><div className="mx-auto flex max-w-[1440px] flex-col gap-6 px-5 py-12 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12"><div><p className="eyebrow text-[#9a6b28]">Ready when you are</p><h2 className="mt-2 font-serif text-3xl font-semibold">Your next journey starts here.</h2></div><div className="flex flex-wrap gap-3"><Link href="/search" className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#152338] px-5 text-sm font-semibold text-white">Search trains <Search className="h-4 w-4" /></Link><Link href="/chat" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#152338]/20 px-5 text-sm font-semibold text-[#152338]">Plan with Yatri <Sparkles className="h-4 w-4" /></Link></div></div></section>
       </main>
-      <footer className="border-t border-white/8 px-4 py-6 text-center text-xs text-slate-600"><p>© 2026 RailYatra AI · Travel decisions, made clearer.</p></footer>
-    </div>
+      <footer className="bg-[#07111f] px-5 py-8 text-center text-xs text-white/45 sm:px-8"><p>© 2026 RailYatra · Travel intelligence for the Indian railway journey.</p></footer>
+    </PageFrame>
   );
 }
+
+function ShieldCheckIcon() { return <span className="text-xs font-bold">✓</span>; }

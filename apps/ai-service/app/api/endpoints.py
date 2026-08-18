@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from uuid import uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -15,6 +17,7 @@ logger = logging.getLogger("ai-service.api.endpoints")
 router = APIRouter()
 
 WORKFLOW_TIMEOUT_SECONDS = 45
+HEARTBEAT_SECONDS = 8
 
 
 class ChatRequest(BaseModel):
@@ -82,6 +85,27 @@ def _classify_ai_error(error: Exception) -> tuple[str, str]:
     return "AI_WORKFLOW_ERROR", "The AI workflow could not complete this request. Please try again."
 
 
+def _event_factory(correlation_id: str):
+    sequence = 0
+
+    def make_event(event_type: str, **payload: Any) -> tuple[dict[str, Any], str]:
+        nonlocal sequence
+        sequence += 1
+        event_id = f"{correlation_id}:{sequence}"
+        return (
+            {
+                "type": event_type,
+                "event_id": event_id,
+                "correlation_id": correlation_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                **payload,
+            },
+            event_id,
+        )
+
+    return make_event
+
+
 @router.post("/chat")
 async def chat(request: ChatRequest):
     """Run the LangGraph orchestrator and return a structured response."""
@@ -121,98 +145,131 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatStreamRequest):
-    """Run the orchestrator and emit standards-compliant SSE events."""
-    logger.info(
-        "Stream request: user=%s, conv=%s",
-        request.user_id,
-        request.conversation_id,
-    )
-    combined_context = await _build_context(
-        request.context, request.conversation_id, request.user_id
-    )
+async def chat_stream(request: ChatStreamRequest, http_request: Request):
+    """Run the orchestrator and emit a resilient, structured SSE event stream."""
+    correlation_id = uuid4().hex
+    logger.info("Stream request: user=%s, conv=%s, correlation=%s", request.user_id, request.conversation_id, correlation_id)
+    combined_context = await _build_context(request.context, request.conversation_id, request.user_id)
+    make_event = _event_factory(correlation_id)
 
     async def event_generator():
+        workflow_task: asyncio.Task[Any] | None = None
         try:
-            yield format_sse({"type": "status", "value": "processing"})
+            for event_type, payload in [
+                ("status", {"value": "processing"}),
+                ("thinking", {"stage": "understanding", "label": "Understanding your request", "state": "active"}),
+                ("tool_start", {"tool": "journey_intelligence", "label": "Preparing railway signals"}),
+            ]:
+                event, event_id = make_event(event_type, **payload)
+                yield format_sse(event, event_id=event_id)
+
+            workflow_task = asyncio.create_task(_execute_workflow(request, combined_context))
+            while not workflow_task.done():
+                if await http_request.is_disconnected():
+                    workflow_task.cancel()
+                    await asyncio.gather(workflow_task, return_exceptions=True)
+                    logger.info("Client disconnected from AI stream correlation=%s", correlation_id)
+                    return
+                try:
+                    await asyncio.wait_for(asyncio.shield(workflow_task), timeout=HEARTBEAT_SECONDS)
+                except asyncio.TimeoutError:
+                    heartbeat, event_id = make_event("heartbeat", value="alive")
+                    yield format_sse(heartbeat, event_id=event_id)
 
             try:
-                ai_response = await _execute_workflow(request, combined_context)
+                ai_response = await workflow_task
             except Exception as error:
                 code, message = _classify_ai_error(error)
-                logger.exception(
-                    "AI stream workflow failed: code=%s user=%s conversation=%s",
-                    code,
-                    request.user_id,
-                    request.conversation_id,
-                )
-                yield format_sse({"type": "error", "code": code, "message": message})
+                logger.exception("AI stream workflow failed: code=%s correlation=%s", code, correlation_id)
+                event, event_id = make_event("error", code=code, message=message, retryable=code != "AI_PROVIDER_CONFIGURATION")
+                yield format_sse(event, event_id=event_id)
+                done, done_id = make_event("done", status="error")
+                yield format_sse(done, event_id=done_id)
                 return
 
-            yield format_sse({"type": "intent", "value": ai_response.intent})
+            for payload in [
+                {"stage": "understanding", "label": "Understanding your request", "state": "complete"},
+                {"stage": "journey_intelligence", "label": "Running journey intelligence", "state": "active"},
+            ]:
+                event, event_id = make_event("thinking", **payload)
+                yield format_sse(event, event_id=event_id)
 
-            response_text = str(ai_response.response or "").strip()
-            if not response_text:
-                yield format_sse(
-                    {
-                        "type": "error",
-                        "message": "The AI service returned an empty response. Please try again.",
-                        "code": "EMPTY_AI_RESPONSE",
-                    }
-                )
-                return
-
-            words = response_text.split(" ")
-            for i, word in enumerate(words):
-                space = " " if i > 0 else ""
-                yield format_sse({"type": "token", "value": space + word})
-                await asyncio.sleep(0.005)
-
-            try:
-                await short_term_memory.add_message(
-                    request.conversation_id, "assistant", response_text
-                )
-            except Exception as ex:
-                logger.warning(f"Error adding message to memory: {ex}")
+            intent_event, intent_id = make_event("intent", value=ai_response.intent, confidence=ai_response.confidence)
+            yield format_sse(intent_event, event_id=intent_id)
+            tool_complete, tool_complete_id = make_event("tool_complete", tool="journey_intelligence", label="Railway signals ready")
+            yield format_sse(tool_complete, event_id=tool_complete_id)
 
             options_payload = []
-            if ai_response.intent in [
-                "plan_travel",
-                "recommendation",
-                "journey_intelligence",
-                "pnr",
-            ]:
+            if ai_response.intent in ["plan_travel", "recommendation", "journey_intelligence", "pnr"]:
                 try:
                     from app.engine.models import TravelRequirement
                     from app.engine.core import journey_intelligence_engine
 
                     src = combined_context.get("source") or "NDLS"
                     dest = combined_context.get("destination") or "BPL"
-                    j_date = combined_context.get("journey_date") or "2026-07-28"
-                    pref_cls = combined_context.get("preferred_class") or "3A"
-                    req = TravelRequirement(
-                        source=str(src).upper(),
-                        destination=str(dest).upper(),
-                        journey_date=str(j_date),
-                        preferred_class=str(pref_cls).upper(),
-                    )
-                    report = await journey_intelligence_engine.analyze_journey(req)
-                    options_payload = [opt.model_dump() for opt in report.options]
+                    j_date = combined_context.get("journey_date")
+                    if j_date:
+                        pref_cls = combined_context.get("preferred_class") or "3A"
+                        req = TravelRequirement(source=str(src).upper(), destination=str(dest).upper(), journey_date=str(j_date), preferred_class=str(pref_cls).upper())
+                        report = await journey_intelligence_engine.analyze_journey(req)
+                        options_payload = [opt.model_dump() for opt in report.options]
+                    else:
+                        logger.info("Skipping journey options because no journey_date was provided correlation=%s", correlation_id)
                 except Exception as ex:
                     logger.error(f"Error compiling stream options: {ex}")
 
-            yield format_sse(
-                {
-                    "type": "done",
-                    "reply": response_text,
-                    "options": options_payload,
-                }
-            )
+            if options_payload:
+                recommendation, recommendation_id = make_event("recommendation", options=options_payload, label="Best options for your journey")
+                yield format_sse(recommendation, event_id=recommendation_id)
+                result, result_id = make_event("train_results", options=options_payload)
+                yield format_sse(result, event_id=result_id)
 
+            thinking_complete, thinking_complete_id = make_event("thinking", stage="journey_intelligence", label="Running journey intelligence", state="complete")
+            yield format_sse(thinking_complete, event_id=thinking_complete_id)
+            answering_active, answering_active_id = make_event("thinking", stage="answering", label="Preparing your answer", state="active")
+            yield format_sse(answering_active, event_id=answering_active_id)
+
+            response_text = str(ai_response.response or "").strip()
+            if not response_text:
+                error_event, error_id = make_event("error", message="The AI service returned an empty response. Please try again.", code="EMPTY_AI_RESPONSE", retryable=True)
+                yield format_sse(error_event, event_id=error_id)
+                done_event, done_id = make_event("done", status="error")
+                yield format_sse(done_event, event_id=done_id)
+                return
+
+            for i, word in enumerate(response_text.split(" ")):
+                space = " " if i > 0 else ""
+                token_event, token_id = make_event("token", value=space + word)
+                yield format_sse(token_event, event_id=token_id)
+                await asyncio.sleep(0.005)
+
+            try:
+                await short_term_memory.add_message(request.conversation_id, "assistant", response_text)
+            except Exception as ex:
+                logger.warning(f"Error adding message to memory: {ex}")
+
+            answering_complete, answering_complete_id = make_event("thinking", stage="answering", label="Preparing your answer", state="complete")
+            yield format_sse(answering_complete, event_id=answering_complete_id)
+            ready_active, ready_active_id = make_event("thinking", stage="complete", label="Ready to act", state="active")
+            yield format_sse(ready_active, event_id=ready_active_id)
+            message_event, message_id = make_event("message", message=response_text)
+            yield format_sse(message_event, event_id=message_id)
+            ready_complete, ready_complete_id = make_event("thinking", stage="complete", label="Ready to act", state="complete")
+            yield format_sse(ready_complete, event_id=ready_complete_id)
+            done_event, done_id = make_event("done", reply=response_text, options=options_payload, status="complete")
+            yield format_sse(done_event, event_id=done_id)
+
+        except asyncio.CancelledError:
+            if workflow_task and not workflow_task.done():
+                workflow_task.cancel()
+            raise
         except Exception as error:
             code, message = _classify_ai_error(error)
-            logger.exception("Unhandled chat stream failure: code=%s", code)
-            yield format_sse({"type": "error", "code": code, "message": message})
+            logger.exception("Unhandled chat stream failure: code=%s correlation=%s", code, correlation_id)
+            event, event_id = make_event("error", code=code, message=message, retryable=True)
+            yield format_sse(event, event_id=event_id)
+            done, done_id = make_event("done", status="error")
+            yield format_sse(done, event_id=done_id)
 
     return StreamingResponse(
         event_generator(),
@@ -221,5 +278,6 @@ async def chat_stream(request: ChatStreamRequest):
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-RailYatra-Correlation-Id": correlation_id,
         },
     )
