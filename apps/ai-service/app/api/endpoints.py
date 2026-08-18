@@ -189,9 +189,7 @@ async def chat_stream(request: ChatStreamRequest, http_request: Request):
 
             for payload in [
                 {"stage": "understanding", "label": "Understanding your request", "state": "complete"},
-                {"stage": "searching", "label": "Searching trains", "state": "complete"},
-                {"stage": "availability", "label": "Checking availability", "state": "complete"},
-                {"stage": "reliability", "label": "Comparing reliability", "state": "active"},
+                {"stage": "journey_intelligence", "label": "Running journey intelligence", "state": "active"},
             ]:
                 event, event_id = make_event("thinking", **payload)
                 yield format_sse(event, event_id=event_id)
@@ -200,6 +198,36 @@ async def chat_stream(request: ChatStreamRequest, http_request: Request):
             yield format_sse(intent_event, event_id=intent_id)
             tool_complete, tool_complete_id = make_event("tool_complete", tool="journey_intelligence", label="Railway signals ready")
             yield format_sse(tool_complete, event_id=tool_complete_id)
+
+            options_payload = []
+            if ai_response.intent in ["plan_travel", "recommendation", "journey_intelligence", "pnr"]:
+                try:
+                    from app.engine.models import TravelRequirement
+                    from app.engine.core import journey_intelligence_engine
+
+                    src = combined_context.get("source") or "NDLS"
+                    dest = combined_context.get("destination") or "BPL"
+                    j_date = combined_context.get("journey_date")
+                    if j_date:
+                        pref_cls = combined_context.get("preferred_class") or "3A"
+                        req = TravelRequirement(source=str(src).upper(), destination=str(dest).upper(), journey_date=str(j_date), preferred_class=str(pref_cls).upper())
+                        report = await journey_intelligence_engine.analyze_journey(req)
+                        options_payload = [opt.model_dump() for opt in report.options]
+                    else:
+                        logger.info("Skipping journey options because no journey_date was provided correlation=%s", correlation_id)
+                except Exception as ex:
+                    logger.error(f"Error compiling stream options: {ex}")
+
+            if options_payload:
+                recommendation, recommendation_id = make_event("recommendation", options=options_payload, label="Best options for your journey")
+                yield format_sse(recommendation, event_id=recommendation_id)
+                result, result_id = make_event("train_results", options=options_payload)
+                yield format_sse(result, event_id=result_id)
+
+            thinking_complete, thinking_complete_id = make_event("thinking", stage="journey_intelligence", label="Running journey intelligence", state="complete")
+            yield format_sse(thinking_complete, event_id=thinking_complete_id)
+            answering_active, answering_active_id = make_event("thinking", stage="answering", label="Preparing your answer", state="active")
+            yield format_sse(answering_active, event_id=answering_active_id)
 
             response_text = str(ai_response.response or "").strip()
             if not response_text:
@@ -220,30 +248,14 @@ async def chat_stream(request: ChatStreamRequest, http_request: Request):
             except Exception as ex:
                 logger.warning(f"Error adding message to memory: {ex}")
 
-            options_payload = []
-            if ai_response.intent in ["plan_travel", "recommendation", "journey_intelligence", "pnr"]:
-                try:
-                    from app.engine.models import TravelRequirement
-                    from app.engine.core import journey_intelligence_engine
-
-                    src = combined_context.get("source") or "NDLS"
-                    dest = combined_context.get("destination") or "BPL"
-                    j_date = combined_context.get("journey_date") or "2026-07-28"
-                    pref_cls = combined_context.get("preferred_class") or "3A"
-                    req = TravelRequirement(source=str(src).upper(), destination=str(dest).upper(), journey_date=str(j_date), preferred_class=str(pref_cls).upper())
-                    report = await journey_intelligence_engine.analyze_journey(req)
-                    options_payload = [opt.model_dump() for opt in report.options]
-                except Exception as ex:
-                    logger.error(f"Error compiling stream options: {ex}")
-
-            if options_payload:
-                recommendation, recommendation_id = make_event("recommendation", options=options_payload, label="Best options for your journey")
-                yield format_sse(recommendation, event_id=recommendation_id)
-                result, result_id = make_event("train_results", options=options_payload)
-                yield format_sse(result, event_id=result_id)
-
+            answering_complete, answering_complete_id = make_event("thinking", stage="answering", label="Preparing your answer", state="complete")
+            yield format_sse(answering_complete, event_id=answering_complete_id)
+            ready_active, ready_active_id = make_event("thinking", stage="complete", label="Ready to act", state="active")
+            yield format_sse(ready_active, event_id=ready_active_id)
             message_event, message_id = make_event("message", message=response_text)
             yield format_sse(message_event, event_id=message_id)
+            ready_complete, ready_complete_id = make_event("thinking", stage="complete", label="Ready to act", state="complete")
+            yield format_sse(ready_complete, event_id=ready_complete_id)
             done_event, done_id = make_event("done", reply=response_text, options=options_payload, status="complete")
             yield format_sse(done_event, event_id=done_id)
 

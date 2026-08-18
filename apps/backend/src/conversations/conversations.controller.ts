@@ -181,6 +181,7 @@ export class ConversationsController {
       data: { conversationId: id, role: 'user', content: message },
     });
 
+    res.status(200);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -243,7 +244,7 @@ export class ConversationsController {
       buffer += decoder.decode();
       const [finalEvents] = parseSSEBuffer(buffer);
       for (const sseEvent of finalEvents) {
-        res.write(`data: ${sseEvent.data}\n\n`);
+        res.write(formatSSEEvent(sseEvent));
       }
     } catch (streamError) {
       if (!streamClosed) {

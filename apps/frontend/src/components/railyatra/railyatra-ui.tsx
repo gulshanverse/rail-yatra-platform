@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -149,9 +150,21 @@ export function TrainCard({ recommended = false, compact = false, train = { name
   </motion.article>;
 }
 
-export function AIThinking({ active = 2 }: { active?: number }) {
-  const stages = ['Understanding your request', 'Searching trains', 'Analysing reliability', 'Finding alternatives'];
-  return <div className="rounded-2xl border border-[#dfe5eb] bg-[#f8fbfd] p-4"><div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#152338]"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#dcecf4] text-[#2e5f87]"><Sparkles className="h-3.5 w-3.5" /></span>Yatri is working</div><div className="grid gap-2 sm:grid-cols-2">{stages.map((stage, index) => <div key={stage} className="flex items-center gap-2 text-xs text-[#768397]"><span className={cn('grid h-5 w-5 place-items-center rounded-full border', index < active ? 'border-[#5c9b79] bg-[#e5f3ea] text-[#28714b]' : index === active ? 'border-[#d2a851] bg-[#fff4d9] text-[#9a6b28]' : 'border-[#d7dde4]')} >{index < active ? <Check className="h-3 w-3" /> : index === active ? <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" /> : null}</span>{stage}</div>)}</div></div>;
+export type AIThinkingStage = {
+  id: string;
+  label: string;
+  state: 'pending' | 'active' | 'complete' | 'error';
+};
+
+const DEFAULT_THINKING_STAGES: AIThinkingStage[] = [
+  { id: 'understanding', label: 'Understanding your request', state: 'active' },
+  { id: 'searching', label: 'Searching trains', state: 'pending' },
+  { id: 'reliability', label: 'Analysing reliability', state: 'pending' },
+  { id: 'alternatives', label: 'Finding alternatives', state: 'pending' },
+];
+
+export function AIThinking({ stages = DEFAULT_THINKING_STAGES }: { stages?: AIThinkingStage[] }) {
+  return <div className="rounded-2xl border border-[#dfe5eb] bg-[#f8fbfd] p-4"><div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#152338]"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#dcecf4] text-[#2e5f87]"><Sparkles className="h-3.5 w-3.5" /></span>Yatri is working</div><div className="grid gap-2 sm:grid-cols-2">{stages.map((stage) => <div key={stage.id} className={cn('flex items-center gap-2 text-xs', stage.state === 'error' ? 'text-[#9f4941]' : 'text-[#768397]')}><span className={cn('grid h-5 w-5 place-items-center rounded-full border', stage.state === 'complete' ? 'border-[#5c9b79] bg-[#e5f3ea] text-[#28714b]' : stage.state === 'active' ? 'border-[#d2a851] bg-[#fff4d9] text-[#9a6b28]' : stage.state === 'error' ? 'border-[#d99b93] bg-[#fff5f2] text-[#9f4941]' : 'border-[#d7dde4]')} >{stage.state === 'complete' ? <Check className="h-3 w-3" /> : stage.state === 'active' ? <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" /> : stage.state === 'error' ? <X className="h-3 w-3" /> : null}</span>{stage.label}</div>)}</div></div>;
 }
 
 export function StatPill({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string }) {
@@ -159,7 +172,7 @@ export function StatPill({ icon: Icon, label, value }: { icon: typeof Clock3; la
 }
 
 export function MiniJourney({ title, route, image, meta }: { title: string; route: string; image: string; meta: string }) {
-  return <Link href="/plan" className="group relative block min-h-[200px] overflow-hidden rounded-[22px] text-white"><img src={image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-[#07111f]/90 via-[#07111f]/25 to-transparent" /><div className="absolute inset-x-5 bottom-5"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#f4d58d]">{meta}</p><h3 className="mt-2 font-serif text-2xl font-semibold">{title}</h3><p className="mt-1 text-sm text-white/75">{route}</p></div></Link>;
+  return <Link href="/plan" className="group relative block min-h-[200px] overflow-hidden rounded-[22px] text-white"><Image src={image} alt="" fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-[#07111f]/90 via-[#07111f]/25 to-transparent" /><div className="absolute inset-x-5 bottom-5"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#f4d58d]">{meta}</p><h3 className="mt-2 font-serif text-2xl font-semibold">{title}</h3><p className="mt-1 text-sm text-white/75">{route}</p></div></Link>;
 }
 
 export const iconSet = { Home, Search, Moon, CalendarDays, UserRound, Ticket, Bot };
