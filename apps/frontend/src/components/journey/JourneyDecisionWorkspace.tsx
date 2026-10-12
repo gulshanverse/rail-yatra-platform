@@ -64,7 +64,7 @@ function availabilityTone(value?: string): 'positive' | 'warning' | 'neutral' {
 }
 
 export function JourneyDecisionWorkspace({ data, loading = false, error = null, onRetry, onSelectOption }: Props) {
-  const options = data?.options ?? [];
+  const options = useMemo(() => data?.options ?? [], [data?.options]);
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const [decisionMode, setDecisionMode] = useState<DecisionMode>('overall');
   const rankedOptions = useMemo(() => rankOptions(options, decisionMode), [options, decisionMode]);

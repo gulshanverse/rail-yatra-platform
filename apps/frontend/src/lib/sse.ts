@@ -1,101 +1,88 @@
-/**
- * Parse complete SSE events from arbitrary browser ReadableStream chunks.
- * The returned remainder must be retained until the next network read so
- * fragmented JSON payloads are never parsed prematurely.
- */
 export interface SSEEvent {
   data: string;
   event?: string;
   id?: string;
+  retry?: number;
 }
 
-interface SSEErrorPayload {
-  type?: string;
+export type AIEventType =
+  | 'thinking' | 'intent' | 'tool_start' | 'tool_complete' | 'message' | 'token'
+  | 'train_results' | 'journey_analysis' | 'pnr_status' | 'live_tracking'
+  | 'recommendation' | 'warning' | 'error' | 'done' | 'status' | 'heartbeat';
+
+export interface AIEvent<T = Record<string, unknown>> {
+  type: AIEventType | string;
+  event_id?: string;
+  correlation_id?: string;
+  timestamp?: string;
+  value?: string;
   message?: string;
-  error?: string;
-  statusCode?: number;
+  code?: string;
+  reply?: string;
+  payload?: T;
+  options?: unknown[];
+  [key: string]: unknown;
 }
 
-const DEFAULT_CHAT_ERROR = 'RailYatra AI could not complete that request. Please try again.';
-
-function friendlyMessage(rawMessage: string): string {
-  const message = rawMessage
-    .replace(/^AI Service error \(\d+\):\s*/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (/quota|rate.?limit|resource.?exhaust|429/i.test(message)) {
-    return 'RailYatra AI is temporarily rate-limited. Please try again in a moment.';
-  }
-  if (/offline|unreachable|network|fetch failed|timeout|timed out|502|503|504/i.test(message)) {
-    return 'RailYatra AI is temporarily unavailable. Please try again in a moment.';
-  }
-  return message || DEFAULT_CHAT_ERROR;
-}
-
-function normalizeErrorPayload(data: string): string {
-  try {
-    const payload = JSON.parse(data) as SSEErrorPayload;
-    const isError = payload.type === 'error' || typeof payload.statusCode === 'number';
-    if (!isError) return data;
-
-    const rawMessage = typeof payload.message === 'string'
-      ? payload.message
-      : typeof payload.error === 'string'
-        ? payload.error
-        : '';
-
-    return JSON.stringify({ type: 'done', reply: friendlyMessage(rawMessage) });
-  } catch {
-    return data;
-  }
-}
-
+/**
+ * Parse complete SSE frames from arbitrary text chunks. The caller must retain
+ * the returned remainder until the next read. No event is silently rewritten:
+ * error and done frames remain visible to the event renderer.
+ */
 export function parseSSEBuffer(buffer: string): [SSEEvent[], string] {
   const events: SSEEvent[] = [];
-  while (true) {
-    let separator = buffer.indexOf("\n\n");
-    let separatorLength = 2;
-    if (separator < 0) {
-      separator = buffer.indexOf("\r\n\r\n");
-      separatorLength = 4;
-    }
-    if (separator < 0) break;
+  let separatorIndex = -1;
+  let separatorLength = 0;
 
-    const rawEvent = buffer.slice(0, separator);
-    buffer = buffer.slice(separator + separatorLength);
+  while (true) {
+    const lf = buffer.indexOf('\n\n');
+    const crlf = buffer.indexOf('\r\n\r\n');
+    const mixed = buffer.indexOf('\r\n\n');
+    const candidates = [
+      lf >= 0 ? [lf, 2] : null,
+      crlf >= 0 ? [crlf, 4] : null,
+      mixed >= 0 ? [mixed, 3] : null,
+    ].filter((candidate): candidate is [number, number] => Boolean(candidate));
+    if (candidates.length === 0) break;
+    [separatorIndex, separatorLength] = candidates.sort((a, b) => a[0] - b[0])[0];
+
+    const rawEvent = buffer.slice(0, separatorIndex);
+    buffer = buffer.slice(separatorIndex + separatorLength);
     const dataLines: string[] = [];
     let event: string | undefined;
     let id: string | undefined;
+    let retry: number | undefined;
 
-    for (const rawLine of rawEvent.replace(/\r\n/g, "\n").split("\n")) {
-      if (!rawLine || rawLine.startsWith(":")) continue;
-      const colon = rawLine.indexOf(":");
+    for (const rawLine of rawEvent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')) {
+      if (!rawLine || rawLine.startsWith(':')) continue;
+      const colon = rawLine.indexOf(':');
       const field = colon >= 0 ? rawLine.slice(0, colon) : rawLine;
-      let value = colon >= 0 ? rawLine.slice(colon + 1) : "";
-      if (value.startsWith(" ")) value = value.slice(1);
-      if (field === "data") dataLines.push(value);
-      else if (field === "event") event = value;
-      else if (field === "id") id = value;
+      let value = colon >= 0 ? rawLine.slice(colon + 1) : '';
+      if (value.startsWith(' ')) value = value.slice(1);
+      if (field === 'data') dataLines.push(value);
+      else if (field === 'event') event = value;
+      else if (field === 'id' && !value.includes('\u0000')) id = value;
+      else if (field === 'retry' && /^\d+$/.test(value)) retry = Number(value);
     }
 
-    if (dataLines.length > 0) {
-      events.push({ data: normalizeErrorPayload(dataLines.join("\n")), event, id });
-    }
-  }
-
-  const trimmed = buffer.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const payload = JSON.parse(trimmed) as SSEErrorPayload;
-      if (typeof payload.statusCode === 'number' || payload.type === 'error') {
-        events.push({ data: normalizeErrorPayload(trimmed) });
-        return [events, ''];
-      }
-    } catch {
-      // Keep incomplete or non-error JSON in the remainder.
-    }
+    if (dataLines.length > 0) events.push({ data: dataLines.join('\n'), event, id, retry });
   }
 
   return [events, buffer];
+}
+
+export function parseAIEvent(data: string): AIEvent | null {
+  try {
+    const parsed = JSON.parse(data) as AIEvent;
+    return parsed && typeof parsed.type === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function friendlyAIError(event: AIEvent | null): string {
+  const raw = event?.message || event?.code || 'RailYatra AI could not complete that request. Please try again.';
+  if (/quota|rate.?limit|resource.?exhaust|429/i.test(raw)) return 'RailYatra AI is temporarily rate-limited. Please try again in a moment.';
+  if (/offline|unreachable|network|fetch failed|timeout|timed out|502|503|504/i.test(raw)) return 'Yatri could not reach the railway service. Please try again shortly.';
+  return raw;
 }
